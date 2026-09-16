@@ -19,30 +19,30 @@
   },
   {
     "policy": "greedy (\uaddc\uce59)",
-    "mean_life": 325.0,
+    "mean_life": 1251.0,
     "sd_life": 0.0,
-    "max_life": 780.0,
+    "max_life": 2304.0,
     "lives": 4.0,
     "score": 140.0,
-    "frames": 1676.0
+    "frames": 5538.0
   },
   {
     "policy": "brain (\uc628\uc804)",
-    "mean_life": 822.0,
+    "mean_life": 726.0,
     "sd_life": 0.0,
-    "max_life": 1668.0,
+    "max_life": 1124.0,
     "lives": 4.0,
-    "score": 140.0,
-    "frames": 4144.0
+    "score": 190.0,
+    "frames": 3616.0
   },
   {
     "policy": "brain lesion DNp02(2)",
-    "mean_life": 822.0,
+    "mean_life": 354.0,
     "sd_life": 0.0,
-    "max_life": 1668.0,
+    "max_life": 612.0,
     "lives": 4.0,
     "score": 140.0,
-    "frames": 4144.0
+    "frames": 2120.0
   },
   {
     "policy": "brain lesion DNp11(2)",
@@ -55,20 +55,20 @@
   },
   {
     "policy": "brain lesion \ubb34\uc791\uc7042 (\uc74c\uc131)",
-    "mean_life": 822.0,
+    "mean_life": 726.0,
     "sd_life": 0.0,
-    "max_life": 1668.0,
+    "max_life": 1124.0,
     "lives": 4.0,
-    "score": 140.0,
-    "frames": 4144.0
+    "score": 190.0,
+    "frames": 3616.0
   },
   {
     "policy": "brain lesion LC4 \uc808\ubc18",
-    "mean_life": 822.0,
+    "mean_life": 567.0,
     "sd_life": 0.0,
-    "max_life": 1668.0,
+    "max_life": 876.0,
     "lives": 4.0,
-    "score": 140.0,
-    "frames": 4144.0
+    "score": 110.0,
+    "frames": 2950.0
   }
 ]

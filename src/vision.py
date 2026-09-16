@@ -81,7 +81,11 @@ class Vision:
             r = max(float(w), float(h)/ASPECT)/2.0        # 종횡비 보정된 반지름
             theta = 2.0*np.arctan2(r, d)
             cur.append((ax, ay, w, h, float(np.degrees(theta))))
-            phi = (np.degrees(np.arctan2(ry, rx)) - head + 180.0) % 360.0 - 180.0
+            # phi_rel: 배의 정면이 0, **오른쪽이 양수**(시계 방향).
+            # [버그 이력] 수학 규약(world - head, 반시계=양수=왼쪽)으로 두고
+            # cells_for 가 양수를 오른쪽 눈으로 보냈다. 그러면 배가 dΔ 만큼 돌 때
+            # 목표 방위가 2dΔ 만큼 움직여 **영원히 정렬이 안 된다** (추진 0%).
+            phi = (head - np.degrees(np.arctan2(ry, rx)) + 180.0) % 360.0 - 180.0
             out.append(dict(phi_rel=float(phi), theta=float(np.degrees(theta)),
                             dtheta=0.0, dist=d, x=ax, y=ay, w=w, h=h))
 
