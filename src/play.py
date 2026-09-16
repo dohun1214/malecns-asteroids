@@ -40,7 +40,8 @@ class BrainPolicy:
         nodes = pd.read_feather(ROOT.parent/"malecns-song"/"graph"/"nodes.feather")
         self.nside = nodes["somaSide"].astype("string").fillna("").to_numpy()
         self.map = LC4Map(P["idx"], P["pos"], P["side"], P["valid"], float(P["theta_L"]), k=k)
-        self.dec = Decoder(self.C, self.nside, min_intensity=min_intensity)
+        self.readout = dict(np.load(G/"vnc_readout.npz", allow_pickle=True))
+        self.dec = Decoder(self.C, self.nside, self.readout, min_intensity=min_intensity)
         self.b = BrainRT(params=PARAMS)
         self.b.reset(); self.b.set_poisson(self.C["LC4"], 1.0)     # has_poi 켜기
         self.b.capture(STEPS_PER_DECISION, tally=True)
