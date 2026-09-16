@@ -35,10 +35,11 @@ class Vision:
     def __init__(self, dt_frames=4):
         self.dt_frames = dt_frames
         self.prev_ship = None
-        self.prev = []            # 이전 결정 시점의 운석 [(x, y, w, h, theta)]
+        self.prev = []            # 이전 결정 시점의 운석 [(x, y, w, h, theta, id)]
+        self._next_id = 0
 
     def reset(self):
-        self.prev_ship = None; self.prev = []
+        self.prev_ship = None; self.prev = []; self._next_id = 0
 
     def parse(self, objs):
         ship = None; asts = []
@@ -80,7 +81,7 @@ class Vision:
             if d < 1e-6: d = 1e-6
             r = max(float(w), float(h)/ASPECT)/2.0        # 종횡비 보정된 반지름
             theta = 2.0*np.arctan2(r, d)
-            cur.append((ax, ay, w, h, float(np.degrees(theta))))
+            cur.append([ax, ay, w, h, float(np.degrees(theta)), -1])
             # phi_rel: 배의 정면이 0, **오른쪽이 양수**(시계 방향).
             # [버그 이력] 수학 규약(world - head, 반시계=양수=왼쪽)으로 두고
             # cells_for 가 양수를 오른쪽 눈으로 보냈다. 그러면 배가 dΔ 만큼 돌 때
@@ -89,19 +90,26 @@ class Vision:
             out.append(dict(phi_rel=float(phi), theta=float(np.degrees(theta)),
                             dtheta=0.0, dist=d, x=ax, y=ay, w=w, h=h))
 
-        # 직전 결정 시점의 같은 운석을 찾아 각크기 변화로 팽창률을 낸다
+        # 직전 결정 시점의 같은 운석을 찾아 각크기 변화로 팽창률을 낸다.
+        # 같은 매칭으로 지속 ID 도 물려준다 (사건 기반 지표용, 이슈 #6).
+        used = set()
         for o, c in zip(out, cur):
-            ax, ay, w, h, th = c
-            best, bd = None, 1e9
-            for (px, py, pw, ph, pth) in self.prev:
-                if pw != w or ph != h:      # 크기가 같은 것끼리만 (3종뿐이라 강한 제약)
+            ax, ay, w, h, th, _ = c
+            best, bd, bi = None, 1e9, None
+            for j, (px, py, pw, ph, pth, pid) in enumerate(self.prev):
+                if pw != w or ph != h or j in used:
                     continue
                 ddx = ax - px; ddy = ay - py
                 ddx -= 160.0*round(ddx/160.0); ddy -= 210.0*round(ddy/210.0)
                 dd = ddx*ddx + ddy*ddy
-                if dd < bd: bd, best = dd, pth
+                if dd < bd: bd, best, bi = dd, pth, j
             if best is not None and bd <= (16.0*self.dt_frames)**2:
                 o["dtheta"] = (th - best)/self.dt_frames
+                c[5] = self.prev[bi][5]
+                used.add(bi)
+            else:
+                c[5] = self._next_id; self._next_id += 1
+            o["id"] = c[5]
         self.prev = cur
         return (sx, sy), head, out
 

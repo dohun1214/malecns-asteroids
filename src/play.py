@@ -124,7 +124,10 @@ class GreedyPolicy:
 
 
 def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fire=True,
-                noop_start=30):
+                noop_start=30, threat_r=30.0):
+    """threat_r 은 스칼라 또는 반경 목록. 반경은 **채점에만** 쓰이고 정책에는 전혀
+    들어가지 않으므로, 여러 반경을 한 번의 주행에서 동시에 집계한다 (3배 절약 +
+    반경 간 비교가 '같은 주행'이라 잡음이 안 섞인다)."""
     """noop_start: 시작 시 무작위 no-op 프레임 수의 상한 (ALE 표준 평가 규약).
 
     [실측] ALE Asteroids 는 env.reset(seed=...) 를 줘도 **게임이 완전히 동일하다.**
@@ -142,6 +145,12 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     action = actions.index("NOOP")
     score = 0.0; frames = 0; alive_runs = []; cur = 0; had_ship = False
     n_up = 0; n_dec = 0
+    # --- 사건 기반 지표 (이슈 #6): 접근 중인 운석이 위험 반경 안에 든 '사건' 단위로 센다
+    radii = [float(threat_r)] if np.isscalar(threat_r) else [float(x) for x in threat_r]
+    ev_open = {R: {} for R in radii}      # 반경 -> {운석 id: 사건 시작 프레임}
+    ev_total = {R: 0 for R in radii}
+    ev_hit = {R: 0 for R in radii}
+    lives_prev = None
     for f in range(max_frames):
         obs, rew, trunc, term, info = env.step(action)     # OCAtari 순서
         score += float(rew); frames += 1
@@ -156,6 +165,24 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
         for o in env.objects:
             if o and type(o).__name__ == "Player":
                 ori = int(getattr(o, "orientation", 0)); break
+        # --- 사건 추적: 피격은 목숨 감소로 판정한다 (Player 소실은 하이퍼스페이스와 구분 불가)
+        lives = info.get("lives", None) if isinstance(info, dict) else None
+        hit_now = (lives_prev is not None and lives is not None and lives < lives_prev)
+        lives_prev = lives
+        for R in radii:
+            op = ev_open[R]; near = set()
+            for L in looms:
+                if L["dtheta"] > 0 and L["dist"] <= R:
+                    near.add(L["id"])
+                    if L["id"] not in op:
+                        op[L["id"]] = f; ev_total[R] += 1
+            if hit_now and op:
+                ev_hit[R] += 1               # 위협 사건이 열려 있는 동안의 피격
+                op.clear()
+            else:
+                for i in list(op):           # 반경 밖으로 나갔거나 사라진 사건은 종료
+                    if i not in near: del op[i]
+
         action, ch = policy(looms, ori, actions)
         n_dec += 1
         if actions[action] == "UP": n_up += 1
@@ -165,7 +192,13 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
                             **{k: float(v) for k, v in ch.items()
                                if isinstance(v, (int, float))}))
     if cur > 0: alive_runs.append(cur)
+    R0 = radii[0]
     return dict(score=score, frames=frames, up_frac=(n_up/max(n_dec,1)),
+                events=ev_total[R0], hits=ev_hit[R0],
+                events_by_r={R: ev_total[R] for R in radii},
+                hits_by_r={R: ev_hit[R] for R in radii},
+                escape_rate=(1.0 - ev_hit[R0]/ev_total[R0]) if ev_total[R0] else float("nan"),
+                exposure=ev_total[R0]/max(frames,1)*1000.0,
                 mean_life=float(np.mean(alive_runs)) if alive_runs else 0.0,
                 max_life=float(max(alive_runs)) if alive_runs else 0.0,
                 n_lives=len(alive_runs))
