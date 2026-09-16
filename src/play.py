@@ -33,15 +33,20 @@ def with_fire(a, actions):
 
 
 class BrainPolicy:
-    def __init__(self, lesion=None, th50=7.2, cap=150.0, k=16, min_intensity=0.0):
+    def __init__(self, lesion=None, th50=7.2, cap=150.0, k=16, min_intensity=0.0,
+                 align_slop=1, hold=0):
         import pandas as pd
         self.C = dict(np.load(G/"circuit_idx.npz"))
         P = np.load(G/"lc4_position.npz", allow_pickle=True)
         nodes = pd.read_feather(ROOT.parent/"malecns-song"/"graph"/"nodes.feather")
         self.nside = nodes["somaSide"].astype("string").fillna("").to_numpy()
+        self._P = P
         self.map = LC4Map(P["idx"], P["pos"], P["side"], P["valid"], float(P["theta_L"]), k=k)
         self.readout = dict(np.load(G/"vnc_readout.npz", allow_pickle=True))
-        self.dec = Decoder(self.C, self.nside, self.readout, min_intensity=min_intensity)
+        self.dec = Decoder(self.C, self.nside, self.readout,
+                           align_slop=align_slop, min_intensity=min_intensity)
+        self.hold = hold          # 정렬되면 몇 결정 동안 추진을 유지할지
+        self._hold_left = 0
         self.b = BrainRT(params=PARAMS)
         self.b.reset(); self.b.set_poisson(self.C["LC4"], 1.0)     # has_poi 켜기
         self.b.capture(STEPS_PER_DECISION, tally=True)
@@ -72,7 +77,28 @@ class BrainPolicy:
         self._gac = (self.b.gacc/STEPS_PER_DECISION).cpu().numpy()
         ch = self.dec.channels(self.rate_of)
         a, tgt, st = self.dec.action(ch, orientation, actions)
+        # 이력: 한 번 정렬되면 hold 결정 동안 추진을 유지한다.
+        # 회전이 결정당 22.5도라 정렬 창을 지나쳐 버리는 문제(이슈 #3)에 대한 대응.
+        if st == "추진":
+            self._hold_left = self.hold
+        elif self._hold_left > 0:
+            self._hold_left -= 1
+            a = actions.index("UP")
         return a, ch
+
+
+    def set_controller(self, k=None, align_slop=None, th50=None, cap=None, hold=None):
+        """뇌(그래프 캡처)는 그대로 두고 컨트롤러만 갈아끼운다."""
+        if k is not None:
+            P = self._P
+            self.map = LC4Map(P["idx"], P["pos"], P["side"], P["valid"],
+                              float(P["theta_L"]), k=k)
+        if align_slop is not None: self.dec.align_slop = align_slop
+        if th50 is not None: self.gain = th50
+        if cap is not None: self.cap = cap
+        if hold is not None: self.hold = hold
+        self._hold_left = 0
+        self.dec.reset()
 
 
 class GreedyPolicy:
@@ -97,13 +123,25 @@ class GreedyPolicy:
         return (actions.index("LEFT") if diff > 0 else actions.index("RIGHT")), ch
 
 
-def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fire=True):
+def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fire=True,
+                noop_start=30):
+    """noop_start: 시작 시 무작위 no-op 프레임 수의 상한 (ALE 표준 평가 규약).
+
+    [실측] ALE Asteroids 는 env.reset(seed=...) 를 줘도 **게임이 완전히 동일하다.**
+    운석 초기 배치가 고정이라 시드로는 변동이 안 생긴다 (에피소드 간 표준편차 0.0,
+    튜닝 시드와 보고 시드의 결과가 소수점까지 일치). 시드 분리로 과적합을 막으려면
+    다른 변동원이 필요하다. 표준 방식대로 시작 시 무작위 no-op 을 넣는다.
+    """
     obs = env.reset(seed=int(rng.integers(0, 2**31)) if rng else 0)
+    if noop_start and rng is not None:
+        for _ in range(int(rng.integers(1, noop_start + 1))):
+            env.step(actions.index("NOOP"))
     V.reset()
     if hasattr(policy, "dec"): policy.dec.reset()
     if hasattr(policy, "b"): policy.b.reset(); policy.frame = 0
     action = actions.index("NOOP")
     score = 0.0; frames = 0; alive_runs = []; cur = 0; had_ship = False
+    n_up = 0; n_dec = 0
     for f in range(max_frames):
         obs, rew, trunc, term, info = env.step(action)     # OCAtari 순서
         score += float(rew); frames += 1
@@ -119,13 +157,15 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
             if o and type(o).__name__ == "Player":
                 ori = int(getattr(o, "orientation", 0)); break
         action, ch = policy(looms, ori, actions)
+        n_dec += 1
+        if actions[action] == "UP": n_up += 1
         if fire: action = with_fire(action, actions)
         if log is not None:
             log.append(dict(f=f, n_loom=len(looms), action=int(action),
                             **{k: float(v) for k, v in ch.items()
                                if isinstance(v, (int, float))}))
     if cur > 0: alive_runs.append(cur)
-    return dict(score=score, frames=frames,
+    return dict(score=score, frames=frames, up_frac=(n_up/max(n_dec,1)),
                 mean_life=float(np.mean(alive_runs)) if alive_runs else 0.0,
                 max_life=float(max(alive_runs)) if alive_runs else 0.0,
                 n_lives=len(alive_runs))
