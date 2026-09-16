@@ -1,0 +1,40 @@
+{
+  "N": 166700,
+  "nnz": 10520431,
+  "frac_0.0": {
+    "k": 0,
+    "affected": 0,
+    "maxdiff": 0.0,
+    "exact": true
+  },
+  "frac_0.0001": {
+    "k": 16,
+    "affected": 849,
+    "maxdiff": 0.0,
+    "exact": true
+  },
+  "frac_0.005": {
+    "k": 833,
+    "affected": 35926,
+    "maxdiff": 0.0,
+    "exact": true
+  },
+  "frac_0.02": {
+    "k": 3334,
+    "affected": 85642,
+    "maxdiff": 0.0,
+    "exact": true
+  },
+  "frac_0.1": {
+    "k": 16670,
+    "affected": 144708,
+    "maxdiff": 0.0,
+    "exact": true
+  },
+  "hub": {
+    "idx": 5,
+    "deg": 7749,
+    "maxdiff": 0.0
+  },
+  "all_exact": true
+}

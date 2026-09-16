@@ -1,0 +1,51 @@
+{
+  "\uc9c1\uc811 \uc8fc\uc785_10": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "\uc9c1\uc811 \uc8fc\uc785_40": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "\uc9c1\uc811 \uc8fc\uc785_200": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "\uc9c1\uc811 \uc8fc\uc785_999": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "Poisson \uc790\uadf9_10": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "Poisson \uc790\uadf9_40": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "Poisson \uc790\uadf9_200": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "Poisson \uc790\uadf9_999": {
+    "dv": 0.0,
+    "dg": 0.0,
+    "drefr": 0,
+    "deterministic": true
+  },
+  "all_deterministic": true
+}
