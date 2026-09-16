@@ -15,24 +15,39 @@ ORIENT0_DEG = 90.0
 
 
 class Decoder:
-    def __init__(self, idx, nside, align_slop=1, min_intensity=0.0):
-        """min_intensity: DNp04(강도 채널) 하한.
-        [실측] 66.6ms 결정 창에서 약하고 공간적으로 퍼진 자극은 DNp04 를 못 깨운다
-        (LC4 전체 150Hz 면 345Hz 로 정상 반응하지만, 게임의 16~43세포 자극에선 0).
-        그래서 강도 채널을 '행동 게이트'로 쓰지 않는다. 방향 채널(norm)만으로 판단한다.
-        DNp04 는 화면 표시용으로만 남긴다."""
+    """회피 벡터를 **하행뉴런의 하류 운동 집단**에서 읽는다 (이슈 #1).
+
+    왜 DN 에서 직접 안 읽는가:
+      1. DN 은 종류당 2세포뿐이라 66.6ms 창에서 스파이크가 1~2개 -> 방향이 2비트로 양자화
+      2. 더 나쁜 건, `alive` 마스크가 출력 전파만 막는데 스파이크 판독은 마스크 적용 후
+         목록에서 읽는다. DNp02 를 끄고 DNp02 출력을 읽으면 **정의상 0** 이다.
+         네트워크를 통한 인과가 아니라 동어반복이다.
+
+    판독 집단은 vnc_targets.py 가 연결성에서 고른다 (이름이 아니라 특이도 기준):
+      DNp02 전용 하류 160개 / DNp11 전용 하류 347개. 공통은 88개뿐이라 거의 분리돼 있다.
+      판독 세포 중 lesion 대상은 하나도 없으므로 동어반복이 원천 차단된다.
+
+    실측 (vnc_sweep.py):
+      방위각 스윕 r = -0.994(좌) / -0.985(우), 단조
+      앞쪽 위협에서 DNp02 를 끄면 전후 채널 +0.551 -> +0.050 (91% 붕괴)
+      뒤쪽 위협에서 DNp11 을 끄면 -0.646 -> +0.238 (**부호 반전**)
+      음성 대조(무작위 2개)는 소수점까지 동일
+    """
+
+    def __init__(self, idx, nside, readout, align_slop=1, min_intensity=0.0):
+        self.a02, self.a11 = readout["dn02_only"], readout["dn11_only"]
+        s02, s11 = readout["side_dn02"], readout["side_dn11"]
+        self.right = np.concatenate([self.a02[s02 == "R"], self.a11[s11 == "R"]])
+        self.left  = np.concatenate([self.a02[s02 == "L"], self.a11[s11 == "L"]])
+        self.all   = np.concatenate([self.a02, self.a11])
+        # 화면 표시용으로 DN 자체도 계속 읽는다
         d02, d11, d04 = idx["DNp02"], idx["DNp11"], idx["DNp04"]
-        self.g = dict(
-            p02_L=d02[nside[d02] == "L"], p02_R=d02[nside[d02] == "R"],
-            p11_L=d11[nside[d11] == "L"], p11_R=d11[nside[d11] == "R"],
-            p04=d04)
+        self.dn = dict(p02_L=d02[nside[d02] == "L"], p02_R=d02[nside[d02] == "R"],
+                       p11_L=d11[nside[d11] == "L"], p11_R=d11[nside[d11] == "R"],
+                       p04=d04)
         self.align_slop = align_slop
         self.min_intensity = min_intensity
-        # [실측] 66.6ms 결정 창에서 DN 한 종류(2세포)의 스파이크는 1~2개뿐이다.
-        # 게이트 1(a)의 동작점은 300ms 창에서 검증한 값이라 4.5배 짧은 창에서는
-        # 방향이 스파이크 양자화에 묻힌다. 지수 평활로 유효 적분 시간을 늘린다.
-        # tau=4 결정 = 약 267ms 로 게이트 1(a) 창과 같은 자릿수가 된다.
-        self.tau = 1.0   # 등급 판독이라 평활 불필요 (지연 0)
+        self.tau = 1.0
         self._s = None
 
     def smooth(self, r):
@@ -47,14 +62,21 @@ class Decoder:
         self._s = None
 
     def channels(self, rate_of):
-        """rate_of(indices) -> 평균 Hz"""
-        r = self.smooth({k: float(rate_of(v)) for k, v in self.g.items()})
-        lateral = (r["p02_R"] + r["p11_R"]) - (r["p02_L"] + r["p11_L"])   # + = 오른쪽
-        fore    = (r["p02_L"] + r["p02_R"]) - (r["p11_L"] + r["p11_R"])   # + = 앞쪽
-        inten   = r["p04"]
+        raw = dict(a02=rate_of(self.a02), a11=rate_of(self.a11),
+                   r=rate_of(self.right), l=rate_of(self.left),
+                   inten=rate_of(self.all))
+        raw.update({k: rate_of(v) for k, v in self.dn.items()})
+        r = self.smooth(raw)
+        fore    = r["a02"] - r["a11"]        # + = 앞쪽 위협 (DNp02 하류 우세)
+        # [실측] VNC 하류는 교차 투사다. DN 은 동측이지만(좌 LC4 -> DNp02_L 19.7 / _R -2.1)
+        # 그 하류 운동 집단은 반대쪽이 더 크다(좌 LC4 자극 -> 좌우채널 +0.16/+0.42).
+        # 하행뉴런이 정중선을 교차하는 건 해부학적으로 정상이다. 부호를 뒤집는다.
+        # 안 뒤집으면 좌우가 거울처럼 반전돼 위협 쪽으로 조종한다 (생존 326 -> 이 버그로).
+        lateral = r["l"]   - r["r"]          # + = 오른쪽 위협 (교차 보정)
         n = np.hypot(lateral, fore)
-        return dict(lateral=lateral, fore=fore, intensity=inten, norm=n,
-                    unit=(lateral/n, fore/n) if n > 1e-9 else (0.0, 0.0), **r)
+        return dict(lateral=lateral, fore=fore, intensity=r["inten"], norm=n,
+                    unit=(lateral/n, fore/n) if n > 1e-9 else (0.0, 0.0),
+                    **{k: r[k] for k in ("p02_L","p02_R","p11_L","p11_R","p04","a02","a11")})
 
     def action(self, ch, orientation, actions):
         """-> (action_index, 목표 orientation 또는 None, 상태 문자열)"""
