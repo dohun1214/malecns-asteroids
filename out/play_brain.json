@@ -1,0 +1,20 @@
+{
+  "agg": {
+    "policy": "brain",
+    "n_ep": 1,
+    "score": 0.0,
+    "mean_life": 1200.0,
+    "max_life": 1200.0,
+    "frames": 1200.0,
+    "wall_s": 2.7059627000126056
+  },
+  "eps": [
+    {
+      "score": 0.0,
+      "frames": 1200,
+      "mean_life": 1200.0,
+      "max_life": 1200.0,
+      "n_lives": 1
+    }
+  ]
+}

@@ -237,7 +237,7 @@ class BrainRT:
         self.alive.index_fill_(0, i.long(), 0 if on else 1)
 
     # ------------------------------------------------------------------- step
-    def _step(self, t):
+    def _step(self, t, tally=False):
         sw = t % self.L
         sr = (t - self.D) % self.L
         _scatter[(self.nprog, self.lanes)](
@@ -253,6 +253,19 @@ class BrainRT:
             self.A, self.B, self.KBA, self.p["v_0"], self.p["v_th"], self.p["v_rst"],
             float(self.p["w_syn"]), HAS_POI=self.has_poi, BLOCK=self.block,
             num_warps=4)
+        if tally:
+            # 분석/게임 루프용 뉴런별 누적 발화수. 캡처 안에 넣어야 replay 로도 집계된다.
+            _tally[(64,)](self.sp[sw], self._cnt_view[sw], self.tally,
+                          NPROG=64, BLOCK=256, num_warps=4)
+
+    def set_poisson_rates(self, idx, rates_hz):
+        """그래프 밖에서 자극 패턴만 갈아끼운다. lam 의 주소는 불변이므로 replay 가 반영한다."""
+        self.lam.zero_()
+        if len(idx):
+            i = torch.as_tensor(np.asarray(idx), device=self.dev).long()
+            r = torch.as_tensor(np.asarray(rates_hz, dtype=np.float32), device=self.dev)
+            self.lam[i] = r * (self.p["dt"]/1000.0)
+        self.has_poi = True
 
     def run_tally(self, steps, reset_tally=True):
         """뉴런별 누적 발화수와 첫 발화 스텝을 기록하며 eager 로 진행 (GPU 동기화 없음)."""
@@ -260,10 +273,7 @@ class BrainRT:
             self.tally.zero_(); self.first.fill_(-1)
         for k in range(steps):
             t = self._t
-            self._step(t)
-            sw = t % self.L
-            _tally[(64,)](self.sp[sw], self._cnt_view[sw], self.tally,
-                          NPROG=64, BLOCK=256, num_warps=4)
+            self._step(t, tally=True)
             fresh = (self.tally > 0) & (self.first < 0)
             self.first = torch.where(fresh, torch.full_like(self.first, t), self.first)
             self._t += 1
@@ -302,7 +312,7 @@ class BrainRT:
         return out
 
     # ------------------------------------------------------- CUDA Graph 캡처
-    def capture(self, steps, warmup=3):
+    def capture(self, steps, warmup=3, tally=False):
         """steps 개를 통째로 언롤해서 캡처한다. 링버퍼 슬롯이 캡처 시점 상수가 되는 게
         맞으려면 steps 가 L 의 배수여야 한다 (05문서 2.4 의 함정)."""
         assert steps % self.L == 0, (
@@ -313,14 +323,15 @@ class BrainRT:
         with torch.cuda.stream(s):
             for _ in range(warmup):
                 for k in range(steps):
-                    self._step(k)
+                    self._step(k, tally)
         torch.cuda.current_stream().wait_stream(s)
         torch.cuda.synchronize()
         self.reset()
         gph = torch.cuda.CUDAGraph()
+        self.tally_in_graph = tally
         with torch.cuda.graph(gph):
             for k in range(steps):
-                self._step(k)
+                self._step(k, tally)
         self.graph = gph
         self.graph_steps = steps
         return gph
