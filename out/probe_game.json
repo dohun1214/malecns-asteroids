@@ -1,0 +1,92 @@
+{
+  "actions": [
+    "NOOP",
+    "FIRE",
+    "UP",
+    "RIGHT",
+    "LEFT",
+    "DOWN",
+    "UPRIGHT",
+    "UPLEFT",
+    "UPFIRE",
+    "RIGHTFIRE",
+    "LEFTFIRE",
+    "DOWNFIRE",
+    "UPRIGHTFIRE",
+    "UPLEFTFIRE"
+  ],
+  "step_return_src": [
+    "This function takes an action, steps the environment, and returns the new state, reward, and other information.",
+    ":return: A tuple containing:",
+    "return obs, reward, truncated, terminated, info"
+  ],
+  "orientation_values": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "frames_per_step": 4.0,
+  "player_dxdy_nonzero": 0,
+  "asteroid_dxdy_nonzero_pct": 50.0,
+  "bad_wh_pct": 7.094448449891853,
+  "ast_per_frame": 3.219,
+  "ast_sizes_top": [
+    [
+      [
+        4,
+        8
+      ],
+      3653
+    ],
+    [
+      [
+        8,
+        15
+      ],
+      2567
+    ],
+    [
+      [
+        16,
+        28
+      ],
+      1098
+    ],
+    [
+      [
+        4,
+        -6
+      ],
+      45
+    ],
+    [
+      [
+        4,
+        -4
+      ],
+      44
+    ],
+    [
+      [
+        4,
+        -2
+      ],
+      44
+    ]
+  ],
+  "ms_raw": 0.05804540000099223,
+  "ms_ocatari": 0.2806472666658616
+}
