@@ -65,3 +65,20 @@ for lo, hi in ((0,45),(45,90),(90,135),(135,180)):
     print(f"  {lo:>3}~{hi:<3}도{'':<6} {int(m.sum()):>4} {M[m,0].mean()+M[m,1].mean():>7.1f} "
           f"{M[m,2].mean()+M[m,3].mean():>7.1f} "
           f"{(M[m,0]+M[m,1]-M[m,2]-M[m,3]).mean():>9.1f}")
+
+# ---- 성분별 진단: 좌우와 전후 중 어느 쪽이 뒤집혔는가
+lat_d = M[:,1] + M[:,3] - M[:,0] - M[:,2]      # 뇌의 좌우 채널
+fore_d = M[:,0] + M[:,1] - M[:,2] - M[:,3]     # 뇌의 전후 채널
+lat_t, fore_t = np.sin(t), np.cos(t)           # 정답 성분
+print(f"\n성분별 상관 (양수여야 정상)")
+print(f"  좌우: 뇌 vs 정답 r = {np.corrcoef(lat_d, lat_t)[0,1]:+.3f}"
+      f"   (뇌 좌우 |평균| {np.abs(lat_d).mean():.1f})")
+print(f"  전후: 뇌 vs 정답 r = {np.corrcoef(fore_d, fore_t)[0,1]:+.3f}"
+      f"   (뇌 전후 |평균| {np.abs(fore_d).mean():.1f})")
+print(f"\n정답 좌우 부호별 뇌 좌우 채널")
+for lo, hi, lbl in ((-180,-5,"정답 왼쪽"), (5,180,"정답 오른쪽")):
+    m = (np.degrees(t) >= lo) & (np.degrees(t) <= hi)
+    if m.sum() < 3: continue
+    print(f"  {lbl} (n={int(m.sum()):>3}): 뇌 좌우 채널 평균 {lat_d[m].mean():+7.2f}"
+          f"   p02L {M[m,0].mean():5.1f} p02R {M[m,1].mean():5.1f}"
+          f"   p11L {M[m,2].mean():5.1f} p11R {M[m,3].mean():5.1f}")

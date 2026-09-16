@@ -52,10 +52,10 @@ PARAMS = dict(
 
 # --------------------------------------------------------------------- kernels
 @triton.jit
-def _membrane(V, G, R, INC, ALIVE, RFC, DRIVE, LAM, SP, CNT, OVER,
+def _membrane(V, G, R, INC, ALIVE, RFC, DRIVE, LAM, GACC, SP, CNT, OVER,
               n, cap, SEED, step, poi_amp,
               A, B, KBA, v_0, v_th, v_rst, w_syn, HAS_POI: tl.constexpr,
-              BLOCK: tl.constexpr):
+              ACC: tl.constexpr, BLOCK: tl.constexpr):
     off = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     m = off < n
 
@@ -94,6 +94,12 @@ def _membrane(V, G, R, INC, ALIVE, RFC, DRIVE, LAM, SP, CNT, OVER,
     g = tl.where(s, 0.0, g)
     r = tl.where(s, tl.load(RFC + off, mask=m, other=0).to(tl.int32), r)
 
+    if ACC:
+        # 스파이크 전 시냅스 구동(g)을 누적한다. 등급이 연속이라 2스파이크 양자화가 없다.
+        # Jang & von Reyn 2023 이 DNp02 를 'subthreshold' 로 기록한 것과도 맞는 판독이다.
+        # atomic_add 는 프로그램마다 주소가 겹치지 않아 결정론적이고,
+        # 같은 주소 load+store 앨리어싱 위험도 없다.
+        tl.atomic_add(GACC + off, g, mask=m)
     tl.store(V + off, v, mask=m)
     tl.store(G + off, g, mask=m)
     tl.store(R + off, r.to(tl.int8), mask=m)
@@ -197,6 +203,8 @@ class BrainRT:
         self.cnt   = torch.zeros(self.L, dtype=torch.int32, device=d)
         self.over  = torch.zeros(1, dtype=torch.int32, device=d)
         self.seed  = torch.zeros(1, dtype=torch.int32, device=d)
+        self.gacc = torch.zeros(N, dtype=torch.float32, device=d)  # 시냅스 구동 누적 (등급 판독)
+        self.acc  = True
         self.tally = torch.zeros(N, dtype=torch.int32, device=d)   # 분석용 누적 발화수
         self.first = torch.zeros(N, dtype=torch.int32, device=d)   # 분석용 첫 발화 스텝
         self._cnt_view = [self.cnt.narrow(0, i, 1) for i in range(self.L)]
@@ -212,6 +220,7 @@ class BrainRT:
     def reset(self):
         self.v.fill_(self.p["v_0"]); self.g.zero_(); self.refr.zero_()
         self.inc.zero_(); self.sp.zero_(); self.cnt.zero_(); self.over.zero_()
+        self.gacc.zero_()
         self.seed.zero_(); self._t = 0
 
     def set_poisson(self, idx, rate_hz):
@@ -248,11 +257,11 @@ class BrainRT:
         self._cnt_view[sw].zero_()
         _membrane[(self.nblk,)](
             self.v, self.g, self.refr, self.inc, self.alive, self.rfc,
-            self.drive, self.lam, self.sp[sw], self._cnt_view[sw], self.over,
+            self.drive, self.lam, self.gacc, self.sp[sw], self._cnt_view[sw], self.over,
             self.N, self.cap, self.seed, t, self.poi_amp,
             self.A, self.B, self.KBA, self.p["v_0"], self.p["v_th"], self.p["v_rst"],
-            float(self.p["w_syn"]), HAS_POI=self.has_poi, BLOCK=self.block,
-            num_warps=4)
+            float(self.p["w_syn"]), HAS_POI=self.has_poi, ACC=self.acc,
+            BLOCK=self.block, num_warps=4)
         if tally:
             # 분석/게임 루프용 뉴런별 누적 발화수. 캡처 안에 넣어야 replay 로도 집계된다.
             _tally[(64,)](self.sp[sw], self._cnt_view[sw], self.tally,

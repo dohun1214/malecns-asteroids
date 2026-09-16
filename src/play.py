@@ -54,17 +54,21 @@ class BrainPolicy:
                 self.b.lesion(torch.as_tensor(self.C[name], device="cuda"))
 
     def rate_of(self, idx):
+        """등급 판독: 창 전체의 평균 시냅스 구동(mV).
+        스파이크 수를 세면 DN 한 종류가 2세포뿐이라 창당 1~2개로 양자화된다.
+        Jang & von Reyn 2023 이 DNp02 를 subthreshold 로 기록한 것과도 맞는 판독이다."""
         if len(idx) == 0: return 0.0
-        return float(self._tal[idx].mean())/self.sec
+        return float(self._gac[idx].mean())
 
     def __call__(self, looms, orientation, actions):
         idx, rates = self.map.rates(looms, self.b.N, self.gain, self.cap)
         self.b.set_poisson_rates(idx, rates)
-        self.b.tally.zero_()
+        self.b.tally.zero_(); self.b.gacc.zero_()
         self.b.seed.fill_(self.frame); self.frame += 1
         self.b.graph.replay()
         torch.cuda.synchronize()
         self._tal = self.b.tally.cpu().numpy()
+        self._gac = (self.b.gacc/STEPS_PER_DECISION).cpu().numpy()
         ch = self.dec.channels(self.rate_of)
         a, tgt, st = self.dec.action(ch, orientation, actions)
         return a, ch
