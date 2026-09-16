@@ -9,7 +9,7 @@
    강도 채널(DNp04)은 변하지 말아야 한다 (02문서 4.3: 방향은 LC4, 강도는 LPLC2/DNp04).
    둘 다 변하면 "그냥 자극 위치 따라 전체가 흔들린 것"이므로 증거가 못 된다.
 """
-import sys, json
+import sys, os, json
 from pathlib import Path
 import numpy as np, torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -25,7 +25,9 @@ THETA = float(P["theta_L"])
 N_STIM = int(sys.argv[1]) if len(sys.argv) > 1 else 16
 RATE   = float(sys.argv[2]) if len(sys.argv) > 2 else 80.0
 T_MS   = 300.0
-p = dict(PARAMS); steps = int(round(T_MS/p["dt"]))
+p = dict(PARAMS)
+if os.environ.get("DT"): p["dt"] = float(os.environ["DT"])
+steps = int(round(T_MS/p["dt"]))
 b = BrainRT(params=p)
 RFC_MAX = 1000.0/p["t_rfc"]
 R = {"n_stim": N_STIM, "rate": RATE, "theta_deg": float(np.degrees(THETA))}
@@ -33,6 +35,8 @@ def say(*a): print(*a, flush=True)
 
 axis = pos[:,0]*np.cos(THETA) + pos[:,1]*np.sin(THETA)   # 전후 시야축 (122도)
 say(f"자극: LC4 {N_STIM}개 x {RATE:.0f} Hz, {T_MS:.0f} ms. 선택 기준은 '육각 위치'뿐")
+say(f"dt = {p['dt']} ms -> {steps} step, 지연 {int(round(p['t_dly']/p['dt']))} step, "
+    f"불응 {int(round(p['t_rfc']/p['dt']))} step")
 say(f"전후 시야축 = 육각공간 {np.degrees(THETA):.0f}도 방향 (retinotopy.py 가 좌반구에서 찾은 축)")
 
 def run(idxs):
@@ -103,5 +107,5 @@ for k, lbl in ((0, "앞쪽"), (NB-1, "뒤쪽")):
 
 R.update({k: {kk: vv for kk, vv in v.items() if kk != "rows"} for k, v in out.items()})
 R["rows"] = {k: v["rows"] for k, v in out.items()}
-(OUT/"gate_1a.json").write_text(json.dumps(R, indent=2, default=float), encoding="utf-8")
+(OUT/f"gate_1a_dt{p['dt']}.json").write_text(json.dumps(R, indent=2, default=float), encoding="utf-8")
 say(f"\n-> out/gate_1a.json")
