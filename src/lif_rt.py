@@ -136,6 +136,20 @@ def _scatter(SP, CNT, CROW, PACKED, INC,
         pid += NPROG
 
 
+@triton.jit
+def _tally(SP, CNT, TALLY, NPROG: tl.constexpr, BLOCK: tl.constexpr):
+    """분석 전용: 뉴런별 누적 스파이크 수. 핫 루프에 부담을 주지 않도록 별도 커널."""
+    cnt = tl.load(CNT)
+    pid = tl.program_id(0)
+    base = pid * BLOCK
+    while base < cnt:
+        o = base + tl.arange(0, BLOCK)
+        m = o < cnt
+        i = tl.load(SP + o, mask=m, other=0)
+        tl.atomic_add(TALLY + i, 1, mask=m)
+        base += NPROG * BLOCK
+
+
 # ----------------------------------------------------------------------- Brain
 class BrainRT:
     def __init__(self, params=None, device="cuda", cap=32768,
@@ -183,6 +197,8 @@ class BrainRT:
         self.cnt   = torch.zeros(self.L, dtype=torch.int32, device=d)
         self.over  = torch.zeros(1, dtype=torch.int32, device=d)
         self.seed  = torch.zeros(1, dtype=torch.int32, device=d)
+        self.tally = torch.zeros(N, dtype=torch.int32, device=d)   # 분석용 누적 발화수
+        self.first = torch.zeros(N, dtype=torch.int32, device=d)   # 분석용 첫 발화 스텝
         self._cnt_view = [self.cnt.narrow(0, i, 1) for i in range(self.L)]
 
         self.nprog, self.lanes, self.eblock, self.block = nprog, lanes, eblock, block
@@ -237,6 +253,27 @@ class BrainRT:
             self.A, self.B, self.KBA, self.p["v_0"], self.p["v_th"], self.p["v_rst"],
             float(self.p["w_syn"]), HAS_POI=self.has_poi, BLOCK=self.block,
             num_warps=4)
+
+    def run_tally(self, steps, reset_tally=True):
+        """뉴런별 누적 발화수와 첫 발화 스텝을 기록하며 eager 로 진행 (GPU 동기화 없음)."""
+        if reset_tally:
+            self.tally.zero_(); self.first.fill_(-1)
+        for k in range(steps):
+            t = self._t
+            self._step(t)
+            sw = t % self.L
+            _tally[(64,)](self.sp[sw], self._cnt_view[sw], self.tally,
+                          NPROG=64, BLOCK=256, num_warps=4)
+            fresh = (self.tally > 0) & (self.first < 0)
+            self.first = torch.where(fresh, torch.full_like(self.first, t), self.first)
+            self._t += 1
+        return self.tally
+
+    def rates(self, idx, steps):
+        """Hz. steps 는 run_tally 에 준 스텝 수."""
+        sec = steps * self.p["dt"] / 1000.0
+        i = torch.as_tensor(np.asarray(idx), device=self.dev).long()
+        return (self.tally[i].float() / sec).cpu().numpy()
 
     def run_eager(self, steps, record_pop=False, record=None):
         pop = torch.zeros(steps, dtype=torch.int32, device=self.dev) if record_pop else None
