@@ -1,0 +1,17 @@
+{
+  "N": 166700,
+  "nnz": 10520431,
+  "idx_dtype": "int32",
+  "alias_values": true,
+  "alias_col": true,
+  "alias_crow": true,
+  "capture_ok": true,
+  "capture_err": null,
+  "replay_matches_eager": true,
+  "graph_reads_live_input": true,
+  "alive_toggle_works": true,
+  "alive_toggle_err": null,
+  "values_swap_works": true,
+  "mv_eager_ms": 0.3373690000444185,
+  "mv_graph_ms": 0.3345249999256339
+}

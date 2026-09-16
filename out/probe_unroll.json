@@ -1,0 +1,12 @@
+{
+  "N": 166700,
+  "nnz": 10520431,
+  "idx": "int32",
+  "steps": 333,
+  "eager_ms": 138.24320001003798,
+  "capture_ok": true,
+  "capture_err": null,
+  "replay_ms": 118.52773999999044,
+  "per_step_ms": 0.3559391591591305,
+  "vram_peak_mb": 85.5146484375
+}
