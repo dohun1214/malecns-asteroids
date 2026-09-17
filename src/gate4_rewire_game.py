@@ -1,5 +1,9 @@
 """게이트 4 (e) — rewire 를 **실제 게임**에서. (d)는 합성 자극 스윕이었다.
 
+🔴 **시드 3개로 처음 쟀다가 과대평가했다.** 합성 스윕을 시드 10개로 다시 재보니
+   방향 소실이 85.8% -> 60.1% 로 내려갔고, 용량 반응도 '급락'이 아니라 **단조 증가**였다
+   (gate4_rewire2.py). 여기도 시드를 6개로 늘린다.
+
 쫓기 모드에서 `LC10a -> AOTU019/025` 배선만 섞고 조준 지표를 잰다.
 세포는 하나도 안 꺼져 있으므로 **신호는 나온다.** 방향만 뒤섞인다.
 """
@@ -12,7 +16,7 @@ import rewire as RW
 
 FRAMES = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 SEEDS = [11, 33, 44]
-RW_SEEDS = [0, 1, 2]
+RW_SEEDS = [0, 1, 2, 3, 4, 5]   # 🔴 시드 3개로는 과대평가가 났다 (gate4_rewire2.py)
 def say(*a): print(*a, flush=True)
 ENV = make_env(); A = ENV.unwrapped.get_action_meanings(); V = Vision()
 ROOT = Path(__file__).resolve().parent.parent
@@ -97,7 +101,7 @@ report("온전")
 for sd in RW_SEEDS:
     pk, _ = RW.rewire(packed0, sel, seed=sd, frac=1.0)
     report(f"lc10a->AOTU 섞기 (s{sd})", pk)
-for sd in RW_SEEDS[:2]:
+for sd in RW_SEEDS[:4]:
     pk, _ = RW.rewire(packed0, sel_other, seed=sd, frac=1.0)
     report(f"LC10a 다른출력 (s{sd})", pk)
 
