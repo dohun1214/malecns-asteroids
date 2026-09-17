@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>초파리 뇌 지도가 Asteroids를 합니다</title>
+<style>
+  :root{
+    --bg:#0e1113; --panel:#161a1d; --line:#232a2e; --fg:#e6edf0; --dim:#8b989f;
+    --accent:#4fd1c5; --alarm:#ff6b5e;
+    --g0:#3a4449; --g1:#4fd1c5; --g2:#6aa9ff; --g3:#ffd166; --g4:#c792ea;
+    --gap:10px; --hdr:56px; --bar:56px; --row2:190px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--fg); overflow:hidden;
+    font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif;
+    font-size:13px;
+  }
+  .num{font-family:ui-monospace,"Cascadia Mono","D2Coding",monospace;
+       font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  #app{height:100%;display:grid;gap:var(--gap);padding:var(--gap);
+       grid-template-rows:var(--hdr) minmax(300px,1fr) var(--row2) var(--bar)}
+  header,.bar{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+       display:flex;align-items:center;gap:16px;padding:0 14px}
+  header h1{font-size:14px;font-weight:600;letter-spacing:-.2px}
+  header .sub{color:var(--dim);font-size:11px}
+  .readouts{margin-left:auto;display:flex;gap:18px}
+  .ro{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25}
+  .ro b{font-size:15px;font-weight:600}
+  .ro span{color:var(--dim);font-size:10px;letter-spacing:.04em}
+  .row{display:grid;gap:var(--gap);min-height:0}
+  #row1{grid-template-columns:4fr 8fr}
+  #row2{grid-template-columns:repeat(4,1fr)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+         display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+  .ph{height:30px;flex:0 0 30px;display:flex;align-items:center;gap:8px;
+      padding:0 12px;border-bottom:1px solid var(--line);color:var(--dim);
+      font-size:11px;letter-spacing:.04em}
+  .ph .r{margin-left:auto;color:var(--fg)}
+  .pb{flex:1;min-height:0;position:relative;padding:8px}
+  canvas{display:block;width:100%;height:100%}
+  #gamewrap{padding:0;display:flex;align-items:center;justify-content:center;background:#000}
+  #game{image-rendering:pixelated;width:auto;height:100%;max-width:100%}
+  .bar button{
+    background:#1b2125;color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:8px 12px;font:inherit;cursor:pointer;transition:.12s}
+  .bar button:hover{border-color:#39454b}
+  .bar button[aria-pressed="true"]{border-color:var(--alarm);color:var(--alarm);
+    box-shadow:inset 0 0 0 1px var(--alarm)}
+  .bar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+  #chip{padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+        color:var(--dim);font-size:12px}
+  #chip.on{border-color:var(--alarm);color:var(--alarm)}
+  #restore{border-color:var(--accent);color:var(--accent)}
+  .legend{display:flex;gap:10px;color:var(--dim);font-size:10px;align-items:center}
+  .dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px}
+  #conn{position:fixed;inset:0;display:grid;place-items:center;background:#0e1113ee;
+        font-size:14px;color:var(--dim);z-index:9}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>초파리 뇌 지도가 Asteroids를 합니다</h1>
+      <div class="sub">MaleCNS v1.0 · 166,700 뉴런 · 10,520,431 시냅스 · 실시간</div>
+    </div>
+    <div class="readouts num">
+      <div class="ro"><b id="r_fps">—</b><span>FPS</span></div>
+      <div class="ro"><b id="r_brain">—</b><span>MS / 결정</span></div>
+      <div class="ro"><b id="r_step">—</b><span>STEP</span></div>
+      <div class="ro"><b id="r_spk">—</b><span>발화 뉴런</span></div>
+      <div class="ro"><b id="r_score">—</b><span>SCORE</span></div>
+    </div>
+  </header>
+
+  <div class="row" id="row1">
+    <div class="panel">
+      <div class="ph">게임 <span class="r num" id="r_act">—</span></div>
+      <div class="pb" id="gamewrap"><canvas id="game" width="160" height="210"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph">전체 뇌 실시간 발화
+        <span class="legend" style="margin-left:12px">
+          <span><i class="dot" style="background:var(--g1)"></i>LC4</span>
+          <span><i class="dot" style="background:var(--g2)"></i>LPLC2</span>
+          <span><i class="dot" style="background:var(--g3)"></i>하행뉴런</span>
+          <span><i class="dot" style="background:var(--g4)"></i>VNC 판독</span>
+        </span>
+        <span class="r num" id="r_pts">—</span></div>
+      <div class="pb" id="brainwrap"><canvas id="brain"></canvas></div>
+    </div>
+  </div>
+
+  <div class="row" id="row2">
+    <div class="panel"><div class="ph">LC4 looming (각크기)</div>
+      <div class="pb"><canvas id="loom"></canvas></div></div>
+    <div class="panel"><div class="ph">스파이크 래스터</div>
+      <div class="pb"><canvas id="raster"></canvas></div></div>
+    <div class="panel"><div class="ph">집단 벡터 <span class="r num" id="r_norm">—</span></div>
+      <div class="pb"><canvas id="vec"></canvas></div></div>
+    <div class="panel"><div class="ph">디코더 <span class="r num" id="r_dec">—</span></div>
+      <div class="pb"><canvas id="dec"></canvas></div></div>
+  </div>
+
+  <div class="bar">
+    <button data-g="DNp11"   aria-pressed="false">DNp11 끄기</button>
+    <button data-g="DNp02"   aria-pressed="false">DNp02 끄기</button>
+    <button data-g="DNp01"   aria-pressed="false">Giant Fiber 끄기</button>
+    <button data-g="LC4half" aria-pressed="false">LC4 절반 끄기</button>
+    <button data-g="rewire"  aria-pressed="false">LC4 배선 섞기</button>
+    <div class="right">
+      <span id="chip">정상 회로</span>
+      <button id="restore">정상 회로로 복구</button>
+      <button id="newgame">새 게임</button>
+    </div>
+  </div>
+</div>
+<div id="conn">서버 연결 중… <span class="num">ws://localhost:8765</span></div>
+
+<script type="importmap">
+{"imports":{
+  "three": "./vendor/three.module.js",
+  "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+}}
+</script>
+<script type="module">
+// three.js 는 vendor/ 에 받아둔다 (데모 당일 CDN·네트워크에 의존하지 않게).
+// OrbitControls 가 bare specifier "three" 를 import 하므로 importmap 이 반드시 필요하다.
+// three 로드 실패를 조용히 넘기지 않는다 (정적 import 는 실패해도 화면에 아무 말이 없다)
+const $conn = document.getElementById("conn");
+const fail = m => { $conn.style.display="grid"; $conn.textContent = m;
+                    document.title = "[오류] " + m; };
+addEventListener("error", e => fail("스크립트 오류: " + (e.message||e.error)));
+let THREE, OrbitControls;
+try {
+  THREE = await import("three");
+  ({OrbitControls} = await import("three/addons/controls/OrbitControls.js"));
+} catch (e) { fail("three.js 로드 실패: " + e); throw e; }
+document.title = "초파리 뇌 지도가 Asteroids를 합니다";
+
+const WS = `ws://${location.hostname}:8765`;
+const $ = s => document.querySelector(s);
+const GC = [0x3a4449,0x4fd1c5,0x6aa9ff,0xffd166,0xc792ea];
+
+/* ---------------- 3D 뇌 ---------------- */
+const wrap = $("#brainwrap"), cv = $("#brain");
+const renderer = new THREE.WebGLRenderer({canvas:cv, antialias:false, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(45,1,0.01,100);
+cam.position.set(0,0,2.15);
+const ctrl = new OrbitControls(cam, renderer.domElement);
+ctrl.enableDamping = true; ctrl.enablePan = false;
+ctrl.autoRotate = true; ctrl.autoRotateSpeed = .45;
+
+let pts=null, aTime=null, N=0;
+const mat = new THREE.ShaderMaterial({
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+  uniforms:{uNow:{value:0}, uTau:{value:0.45}, uSize:{value:2.1}},
+  vertexShader:`
+    attribute float aSpikeTime; attribute vec3 aColor; attribute float aDead;
+    varying float vA; varying vec3 vC;
+    uniform float uNow,uTau,uSize;
+    void main(){
+      float dt = uNow - aSpikeTime;
+      vA = (aSpikeTime < -1.0) ? 0.0 : exp(-max(dt,0.0)/uTau);
+      vC = aDead > 0.5 ? vec3(0.35,0.16,0.14) : aColor;
+      vec4 mv = modelViewMatrix * vec4(position,1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = clamp(uSize*(1.0+2.2*vA)*(3.0/-mv.z), 1.0, 5.0);
+    }`,
+  fragmentShader:`
+    varying float vA; varying vec3 vC;
+    void main(){
+      vec2 d = gl_PointCoord-vec2(0.5);
+      if(dot(d,d)>0.25) discard;
+      float base = 0.055;
+      gl_FragColor = vec4(vC, base + 0.95*vA);
+    }`
+});
+
+async function loadBrain(meta){
+  const [xb,gb] = await Promise.all([
+    fetch("soma_xyz.bin").then(r=>r.arrayBuffer()),
+    fetch("soma_grp.bin").then(r=>r.arrayBuffer())]);
+  const xyz = new Float32Array(xb), grp = new Uint8Array(gb);
+  N = grp.length;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(xyz,3));
+  aTime = new Float32Array(N).fill(-9);
+  const at = new THREE.BufferAttribute(aTime,1); at.setUsage(THREE.StreamDrawUsage);
+  g.setAttribute("aSpikeTime", at);
+  const col = new Float32Array(N*3), dead = new Float32Array(N);
+  for(let i=0;i<N;i++){ const c=new THREE.Color(GC[grp[i]]);
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }
+  g.setAttribute("aColor", new THREE.BufferAttribute(col,3));
+  const da = new THREE.BufferAttribute(dead,1); da.setUsage(THREE.StreamDrawUsage);
+  g.setAttribute("aDead", da);
+  pts = new THREE.Points(g, mat); scene.add(pts);
+  window._grp = grp; window._dead = dead;
+  $("#r_pts").textContent = N.toLocaleString()+" 점";
+}
+
+function resize(){
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w,h,false); cam.aspect = w/h; cam.updateProjectionMatrix();
+  for(const id of ["loom","raster","vec","dec"]){
+    const c = $("#"+id), r = c.parentElement.getBoundingClientRect();
+    c.width = Math.max(1,(r.width-16)*devicePixelRatio);
+    c.height = Math.max(1,(r.height-16)*devicePixelRatio);
+  }
+}
+addEventListener("resize", resize);
+
+let t0 = performance.now();
+function tick(){
+  const now = (performance.now()-t0)/1000;
+  mat.uniforms.uNow.value = now;
+  if(pts) pts.geometry.attributes.aSpikeTime.needsUpdate = true;
+  ctrl.update(); renderer.render(scene,cam);
+  drawPanels();
+  requestAnimationFrame(tick);
+}
+
+/* ---------------- 게임 화면 ---------------- */
+const gctx = $("#game").getContext("2d");
+let gimg = null;
+function drawVideo(buf){
+  const dv = new DataView(buf);
+  const wh = dv.getUint32(8,true), w = wh>>>16, h = wh & 0xffff;
+  const src = new Uint8Array(buf, 12);
+  if(!gimg || gimg.width!==w){ $("#game").width=w; $("#game").height=h;
+    gimg = gctx.createImageData(w,h); }
+  const d = gimg.data;
+  for(let i=0,j=0,k=0;i<w*h;i++,j+=3,k+=4){
+    d[k]=src[j]; d[k+1]=src[j+1]; d[k+2]=src[j+2]; d[k+3]=255;
+  }
+  gctx.putImageData(gimg,0,0);
+  overlay(w,h);
+}
+
+/* 배에서 뻗는 '가려는 방향' 쐐기 + 운석 박스 (06문서 §3) */
+function overlay(w,h){
+  if(!S || !S.ship) return;
+  const g=gctx, [sx,sy]=S.ship;
+  g.lineWidth=1; g.strokeStyle="rgba(255,255,255,.28)";
+  (S.looms||[]).forEach(L=>{ g.strokeRect(L.x-0.5, L.y-0.5, L.w+1, L.h+1); });
+  if(!S.ch || S.ch.norm < 1e-6) return;
+  // world = head - psi_escape (decode.py 와 같은 규약). 화면은 y 가 아래로 증가한다.
+  const psiE = Math.atan2(S.ch.unit[0], S.ch.unit[1])*180/Math.PI + 180;
+  const world = ((S.heading - psiE) % 360) * Math.PI/180;
+  const L = 14 + 26*Math.min(1, S.ch.norm*3), spread = 0.26;
+  const weak = S.ch.norm < 0.16;
+  g.fillStyle = weak ? "rgba(255,107,94,.55)" : "rgba(79,209,197,.55)";
+  g.beginPath(); g.moveTo(sx+3, sy+5);
+  for(const k of [-spread, spread])
+    g.lineTo(sx+3+Math.cos(world+k)*L, sy+5-Math.sin(world+k)*L);
+  g.closePath(); g.fill();
+}
+
+/* ---------------- 작은 패널 ---------------- */
+const hist = {loom:[], raster:[], fore:[], lat:[]};
+let S = null;
+function px(c){ return c.getContext("2d"); }
+function clear(c){ const g=px(c); g.clearRect(0,0,c.width,c.height); return g; }
+
+function drawPanels(){
+  if(!S) return;
+  const dpr = devicePixelRatio;
+  // ① looming 트레이스
+  let c=$("#loom"), g=clear(c);
+  g.strokeStyle="#4fd1c5"; g.lineWidth=1.5*dpr; g.beginPath();
+  const H=c.height, W=c.width, mx=Math.max(1,...hist.loom);
+  hist.loom.forEach((v,i)=>{ const x=W*i/200, y=H-(v/mx)*(H-8)-4;
+    i?g.lineTo(x,y):g.moveTo(x,y); }); g.stroke();
+  g.fillStyle="#8b989f"; g.font=`${11*dpr}px ui-monospace`;
+  g.fillText(`최대 각크기 ${mx.toFixed(1)}°`, 6*dpr, 14*dpr);
+
+  // ② 래스터 (4밴드)
+  c=$("#raster"); g=clear(c);
+  const bands=["LC4","LPLC2","DN","VNC"], bh=c.height/4;
+  hist.raster.forEach((col,i)=>{
+    const x=c.width*i/120;
+    for(let b=0;b<4;b++){
+      const v=col[b]; if(!v) continue;
+      g.fillStyle=["#4fd1c5","#6aa9ff","#ffd166","#c792ea"][b];
+      g.globalAlpha=Math.min(1,v); g.fillRect(x,b*bh+2,Math.max(1,c.width/120),bh-4);
+    }});
+  g.globalAlpha=1; g.fillStyle="#8b989f"; g.font=`${10*dpr}px ui-monospace`;
+  bands.forEach((b,i)=>g.fillText(b,4*dpr,(i+0.6)*bh));
+
+  // ③ 집단 벡터
+  c=$("#vec"); g=clear(c);
+  const cx=c.width/2, cy=c.height/2, R=Math.min(cx,cy)-14*dpr;
+  g.strokeStyle="#232a2e"; g.lineWidth=1*dpr;
+  g.beginPath(); g.arc(cx,cy,R,0,7); g.stroke();
+  g.beginPath(); g.moveTo(cx-R,cy); g.lineTo(cx+R,cy);
+  g.moveTo(cx,cy-R); g.lineTo(cx,cy+R); g.stroke();
+  if(S.ch){
+    const u=S.ch.unit, n=S.ch.norm;
+    g.strokeStyle = n<0.16 ? "#ff6b5e" : "#4fd1c5"; g.lineWidth=2.5*dpr;
+    g.beginPath(); g.moveTo(cx,cy);
+    g.lineTo(cx+u[0]*R*Math.min(1,n*3), cy-u[1]*R*Math.min(1,n*3)); g.stroke();
+    if(n<0.16){ g.fillStyle="#ff6b5e"; g.font=`${11*dpr}px ui-monospace`;
+      g.fillText("상쇄", cx-14*dpr, cy+R+10*dpr); }
+  }
+  g.fillStyle="#8b989f"; g.font=`${10*dpr}px ui-monospace`;
+  g.fillText("앞", cx-6*dpr, 12*dpr); g.fillText("오른쪽", c.width-34*dpr, cy-4*dpr);
+
+  // ④ 디코더 바
+  c=$("#dec"); g=clear(c);
+  if(S.ch){
+    const rows=[["전후 (DNp02−DNp11)",S.ch.fore],["좌우",S.ch.lateral],
+                ["강도",S.ch.intensity],["‖v‖",S.ch.norm]];
+    const rh=(c.height-24*dpr)/rows.length;
+    rows.forEach((r,i)=>{
+      const y=i*rh+8*dpr, w=c.width-120*dpr;
+      g.fillStyle="#8b989f"; g.font=`${10*dpr}px ui-monospace`;
+      g.fillText(r[0], 4*dpr, y+rh*0.6);
+      const mid=110*dpr+w/2, v=Math.max(-1,Math.min(1,r[1]));
+      g.fillStyle="#232a2e"; g.fillRect(110*dpr,y+rh*0.25,w,rh*0.35);
+      g.fillStyle="#4fd1c5";
+      g.fillRect(Math.min(mid,mid+v*w/2), y+rh*0.25, Math.abs(v)*w/2, rh*0.35);
+    });
+    g.fillStyle="#e6edf0"; g.font=`600 ${15*dpr}px ui-monospace`;
+    g.fillText(S.action||"—", 4*dpr, c.height-4*dpr);
+  }
+}
+
+/* ---------------- WebSocket ---------------- */
+let ws;
+function connect(){
+  ws = new WebSocket(WS); ws.binaryType="arraybuffer";
+  ws.onopen = ()=>{ $("#conn").style.display="none"; };
+  ws.onclose = ()=>{ $("#conn").style.display="grid";
+    $("#conn").textContent="연결 끊김 — 재연결 중…"; setTimeout(connect,1200); };
+  ws.onmessage = ev=>{
+    if(typeof ev.data === "string"){ onStatus(JSON.parse(ev.data)); return; }
+    const dv = new DataView(ev.data), magic = dv.getUint32(0,true);
+    if(magic === 0x31594C46) onSpikes(ev.data, dv);
+    else if(magic === 0x32594C46) drawVideo(ev.data);
+  };
+}
+function onSpikes(buf, dv){
+  if(!aTime) return;
+  const n = dv.getUint32(8,true), d = new Uint16Array(buf,12,n);
+  const now = (performance.now()-t0)/1000;
+  let idx=0;
+  for(let i=0;i<n;i++){ idx += d[i]; if(idx<N) aTime[idx]=now; }
+}
+function onStatus(s){
+  if(s.type==="hello"){ loadBrain(s).then(resize); return; }
+  S = s;
+  $("#r_fps").textContent = (s.fps??0).toFixed(1);
+  $("#r_brain").textContent = (s.ms_brain??0).toFixed(1);
+  $("#r_step").textContent = s.step;
+  $("#r_spk").textContent = (s.n_fired??0).toLocaleString();
+  $("#r_score").textContent = Math.round(s.score);
+  $("#r_act").textContent = s.action ?? "—";
+  if(s.ch){ $("#r_norm").textContent = s.ch.norm.toFixed(3);
+            $("#r_dec").textContent = `전후 ${s.ch.fore.toFixed(2)}  좌우 ${s.ch.lateral.toFixed(2)}`; }
+  const mx = s.looms?.length ? Math.max(...s.looms.map(l=>l.th)) : 0;
+  hist.loom.push(mx); if(hist.loom.length>200) hist.loom.shift();
+  if(s.ch){
+    hist.raster.push([Math.min(1,mx/20), Math.min(1,s.ch.intensity*2),
+                      Math.min(1,(Math.abs(s.ch.p02_L)+Math.abs(s.ch.p11_L))/2),
+                      Math.min(1,s.ch.intensity*3)]);
+    if(hist.raster.length>120) hist.raster.shift();
+  }
+  // 병변 표시
+  const on = new Set(s.lesion||[]);
+  document.querySelectorAll(".bar button[data-g]").forEach(b=>
+    b.setAttribute("aria-pressed", on.has(b.dataset.g) ? "true":"false"));
+  const chip = $("#chip");
+  chip.textContent = on.size ? "병변: "+[...on].join(" · ") : "정상 회로";
+  chip.className = on.size ? "on" : "";
+  if(window._dead && pts){
+    const dead=window._dead, grp=window._grp;
+    const gset = new Set(); // 1=LC4 3=DN 4=VNC
+    if(on.has("LC4half")) gset.add(1);
+    if(on.has("DNp11")||on.has("DNp02")||on.has("DNp01")) gset.add(3);
+    let ch=false;
+    for(let i=0;i<dead.length;i++){
+      const v = gset.has(grp[i]) ? 1 : 0;
+      if(dead[i]!==v){ dead[i]=v; ch=true; }
+    }
+    if(ch) pts.geometry.attributes.aDead.needsUpdate = true;
+  }
+}
+document.querySelectorAll(".bar button[data-g]").forEach(b=>b.onclick=()=>{
+  const on = b.getAttribute("aria-pressed")!=="true";
+  ws.send(JSON.stringify({cmd:"lesion", group:b.dataset.g, on}));
+});
+$("#restore").onclick = ()=> ws.send(JSON.stringify({cmd:"restore"}));
+$("#newgame").onclick = ()=> ws.send(JSON.stringify({cmd:"newgame"}));
+
+try { resize(); connect(); tick(); }
+catch(e){ fail("시작 실패: " + e); }
+</script>
+</body>
+</html>
