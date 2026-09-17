@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np, torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from play import (BrainPolicy, make_env, Vision, ACT_EVERY, with_fire,
+from play import (BrainPolicy, PursuitPolicy, make_env, Vision, ACT_EVERY, with_fire,
                   frame_action, STEPS_PER_DECISION)
 from vision import ship_heading_deg
 import rewire as RW
@@ -55,7 +55,7 @@ class Mailbox:
 
 
 class Sim(threading.Thread):
-    GROUPS = ("DNp11", "DNp02", "DNp01", "LC4half", "rewire")
+    GROUPS = ("DNp11", "DNp02", "DNp01", "LC4half", "rewire", "LC10a", "rewire_p")
 
     def __init__(self, box):
         super().__init__(daemon=True)
@@ -63,12 +63,19 @@ class Sim(threading.Thread):
         self.cmds = collections.deque()
         self.stop_flag = threading.Event()
         self.lesion = set()
+        self.mode = "escape"      # escape=도망 / pursuit=쫓기
         S = np.load(ROOT/"graph"/"soma.npz")
         self.pt_of = S["pt_of"]
         self.n_pts = int((self.pt_of >= 0).sum())
 
     def setup(self):
         self.bp = BrainPolicy()
+        # 쫓기 모드용 두 번째 뇌. **두 모드 다 166,700개를 전부 돌린다** —
+        # 모드는 '어느 판독을 핸들에 거느냐'지 뉴런을 끄는 게 아니다 (21문서 §1).
+        # 자극 집합이 다르면 set_poisson 의 rfc=0 대상이 달라지므로 한 인스턴스로 못 겸한다.
+        # (LC10a 에 rfc=0 을 걸어두면 도망 모드의 동역학이 바뀌어 기존 게이트 수치가 흔들린다.)
+        # VRAM 실측: 뇌 1개당 약 1.9 GB, RTX 4060 Ti 8 GB 에 둘 다 올라간다.
+        self.pp = PursuitPolicy()
         self.C = self.bp.C
         # 래스터에 쓸 '실제' 그룹별 스파이크 집계용 인덱스.
         # [버그 이력] 예전엔 LC4 밴드에 운석 각크기를, LPLC2 밴드에 판독 강도를 그렸다.
@@ -89,10 +96,27 @@ class Sim(threading.Thread):
         self.A = self.env.unwrapped.get_action_meanings()
         self.V = Vision()
         self.packed0 = self.bp.b.packed.clone()
+        self.packed0_p = self.pp.b.packed.clone()
         crow, packed0, C, pre = RW.load()
-        sel = RW.conditions(C, crow.size-1, pre, packed0)
+        N_ = crow.size - 1
+        sel = RW.conditions(C, N_, pre, packed0)
         newp, _ = RW.rewire(packed0, sel["lc4_all"], seed=0, frac=1.0)
         self.packed_rw = torch.from_numpy(newp.astype(np.int32)).to(self.bp.b.dev)
+        # 추적 rewire: LC10a -> AOTU019/025 만 섞는다 (게이트 4(d), 21문서)
+        import pandas as _pd
+        _typ = _pd.read_feather(ROOT.parent/"malecns-song"/"graph"/"nodes.feather")[
+            "type"].astype("string").fillna("").to_numpy()
+        _aotu = np.concatenate([np.where(_typ == t)[0] for t in ("AOTU019", "AOTU025")])
+        _sel_p = RW.select(N_, pre, packed0, self.pp.LC10A, _aotu)
+        newq, _ = RW.rewire(packed0, _sel_p, seed=0, frac=1.0)
+        self.packed_rw_p = torch.from_numpy(newq.astype(np.int32)).to(self.pp.b.dev)
+        # 래스터 밴드: 모드마다 내용이 다르다 (라벨은 클라이언트가 바꾼다)
+        RP = np.load(ROOT/"graph"/"pursuit_readout.npz", allow_pickle=True)
+        self.grp_idx_p = dict(lc4=np.asarray(self.pp.LC10A),
+                              dnp02=_aotu,
+                              dnp11=np.concatenate([np.where(_typ == t)[0] for t in
+                                                    ("DNa02", "DNa13", "DNa15", "DNa03")]),
+                              vnc=np.concatenate([RP["left"], RP["right"]]))
         self.rng = np.random.default_rng(1234)
 
     def grab(self):
@@ -121,20 +145,32 @@ class Sim(threading.Thread):
 
     def cells(self, g):
         if g == "LC4half": return self.C["LC4"][::2]
+        if g == "LC10a": return self.pp.LC10A
         return self.C.get(g)
+
+    @property
+    def pol(self):
+        return self.bp if self.mode == "escape" else self.pp
 
     def apply(self, g, on):
         if g == "rewire":
             self.bp.b.packed.copy_(self.packed_rw if on else self.packed0)
+        elif g == "rewire_p":
+            self.pp.b.packed.copy_(self.packed_rw_p if on else self.packed0_p)
         else:
             idx = self.cells(g)
             if idx is None or not len(idx): return
-            self.bp.b.lesion(torch.as_tensor(np.asarray(idx), device="cuda"), on=on)
+            # 🔴 **두 뇌에 똑같이 건다.** 한쪽만 걸면 모드를 바꿨을 때 병변 상태가 어긋나고
+            #    화면의 '죽은 색'과 실제 alive 가 달라진다 (06문서 §8 의 그 버그 계열).
+            t = torch.as_tensor(np.asarray(idx), device="cuda")
+            self.bp.b.lesion(t, on=on)
+            self.pp.b.lesion(t, on=on)
         (self.lesion.add if on else self.lesion.discard)(g)
 
     def restore(self):
-        self.bp.b.alive.fill_(1)
+        self.bp.b.alive.fill_(1); self.pp.b.alive.fill_(1)
         self.bp.b.packed.copy_(self.packed0)
+        self.pp.b.packed.copy_(self.packed0_p)
         self.lesion.clear()
 
     def refresh_dead(self):
@@ -143,7 +179,7 @@ class Sim(threading.Thread):
           DNp11 2개를 껐는데 하행뉴런 18개가 전부 죽은 색이 됐다.
           이 데모의 주장이 '2개만 껐다'인데 화면이 18개라고 말하면 안 된다.
         alive 텐서가 유일한 진실이므로 거기서 직접 뽑는다 (그룹 조합·복구 전부 자동으로 맞는다)."""
-        al = self.bp.b.alive.cpu().numpy()
+        al = self.pol.b.alive.cpu().numpy()
         pts = self.pt_of[np.flatnonzero(al == 0)]
         self._dead_pts = sorted(int(x) for x in pts[pts >= 0])
         self._dead_v += 1
@@ -155,6 +191,13 @@ class Sim(threading.Thread):
             k = c.get("cmd")
             if k == "lesion": self.apply(c["group"], bool(c["on"])); n += 1
             elif k == "restore": self.restore(); n += 1
+            elif k == "mode":
+                m = c.get("mode")
+                if m in ("escape", "pursuit") and m != self.mode:
+                    self.mode = m
+                    self.pol.b.reset(); self.pol.frame = 0
+                    if hasattr(self.pol, "dec"): self.pol.dec.reset()
+                    n += 1
             elif k == "newgame": self._new = True
         if n: self.refresh_dead()
 
@@ -176,6 +219,7 @@ class Sim(threading.Thread):
                 env.reset(seed=int(self.rng.integers(0, 2**31)))
                 for _ in range(int(self.rng.integers(1, 31))): env.step(A.index("NOOP"))
                 V.reset(); bp.dec.reset(); bp.b.reset(); bp.frame = 0
+                self.pp.b.reset(); self.pp.frame = 0
                 self._objs = None; self._objs_age = 0
                 self._scr2 = [None, None]
                 score = 0.0; action = (A.index("NOOP"), A.index("FIRE"))
@@ -208,7 +252,9 @@ class Sim(threading.Thread):
                 # 그동안 뇌를 안 돌리면 3D 뇌 화면이 통째로 얼어붙어서 고장난 것처럼 보인다.
                 # -> 자극만 비우고 뇌는 **항상** 돌린다. 액션만 무시한다.
                 tb = time.perf_counter()
-                a, ch = bp(looms, ori, A, vel=V.ship_v)
+                pol = self.pol
+                a, ch = (pol(looms, ori, A, vel=V.ship_v) if pol is bp
+                         else pol(looms, ori, A))
                 ms_brain = (time.perf_counter()-tb)*1000.0
                 action = ((A.index("NOOP"), A.index("FIRE")) if xy is None
                           else (a, with_fire(a, A)))
@@ -227,7 +273,10 @@ class Sim(threading.Thread):
             if time.perf_counter() - t_next > 0.25: t_next = time.perf_counter()
 
     def emit(self, step, obs, ch, looms, xy, ori, score, info, ms_brain, ms_frame, fps, action):
-        tal = self.bp._tal if hasattr(self.bp, "_tal") else None
+        pol = self.pol
+        tal = getattr(pol, "_tal", None)
+        if tal is None and self.mode == "pursuit":
+            tal = pol.b.tally.cpu().numpy()
         if tal is None: return
         fired = np.flatnonzero(tal > 0)
         pts = self.pt_of[fired]
@@ -240,25 +289,29 @@ class Sim(threading.Thread):
             a = np.ascontiguousarray(obs, dtype=np.uint8)
             h, w = a.shape[0], a.shape[1]
             vid = struct.pack("<III", MAGIC_VID, step, (w << 16) | h) + a.tobytes()
+        gi = self.grp_idx if self.mode == "escape" else self.grp_idx_p
         rates = {k: round(float(tal[v].sum())/len(v)/self.sec, 1)
-                 for k, v in self.grp_idx.items()}          # 그룹 평균 발화율 (Hz)
+                 for k, v in gi.items()}                    # 그룹 평균 발화율 (Hz)
         st = dict(step=step, score=score, ship_age=int(self._objs_age),
                   rates=rates, dead_v=self._dead_v, lives=info.get("lives") if isinstance(info, dict) else None,
                   fps=round(fps, 1), ms_brain=round(ms_brain, 2), ms_frame=round(ms_frame, 2),
                   spikes=int(len(pts)), n_fired=int(fired.size),
                   action=self.A[action[0] if isinstance(action, tuple) else action], ori=ori, heading=round(ship_heading_deg(ori), 1),
-                  lesion=sorted(self.lesion),
+                  lesion=sorted(self.lesion), mode=self.mode,
                   ship=[round(float(xy[0]), 1), round(float(xy[1]), 1)] if xy else None,
                   looms=[dict(x=round(float(L["x"]), 1), y=round(float(L["y"]), 1),
                               w=int(L["w"]), h=int(L["h"]),
                               th=round(float(L["theta"]), 2), dth=round(float(L["dtheta"]), 3),
                               phi=round(float(L["phi_rel"]), 1)) for L in looms[:16]])
         if ch is not None:
-            st["ch"] = {k: (round(float(ch[k]), 4) if not isinstance(ch[k], tuple) else
+            # 🔴 모드마다 채널 키가 다르다. 없는 키를 요구하면 쫓기 모드에서 터진다.
+            KEYS = ("fore", "lateral", "intensity", "norm", "unit",
+                    "p02_L", "p02_R", "p11_L", "p11_R", "p04",
+                    "a02", "a11", "l", "r", "left", "right", "steer")
+            st["ch"] = {k: (round(float(ch[k]), 4)
+                            if not isinstance(ch[k], (tuple, list)) else
                             [round(float(x), 4) for x in ch[k]])
-                        for k in ("fore", "lateral", "intensity", "norm", "unit",
-                                  "p02_L", "p02_R", "p11_L", "p11_R", "p04",
-                                  "a02", "a11", "l", "r")}
+                        for k in KEYS if k in ch}
         if self._dead_v != getattr(self, "_dead_sent", -1):
             st["dead"] = self._dead_pts          # 바뀔 때만 보낸다
             self._dead_sent = self._dead_v
