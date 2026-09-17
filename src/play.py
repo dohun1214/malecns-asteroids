@@ -9,6 +9,7 @@
 """
 import sys, os, json, time
 from pathlib import Path
+import inspect
 import numpy as np, torch
 from ocatari.core import OCAtari
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -152,6 +153,19 @@ class GreedyPolicy:
         return (actions.index("LEFT") if diff > 0 else actions.index("RIGHT")), ch
 
 
+
+def _takes_vel(policy):
+    """정책이 vel 인자를 받는가. 한 번만 검사해서 루프 안에서는 분기만 한다."""
+    try:
+        sig = inspect.signature(policy)
+    except (TypeError, ValueError):
+        return False
+    ps = sig.parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in ps.values()):
+        return True
+    return "vel" in ps
+
+
 def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fire=True,
                 noop_start=30, threat_r=30.0):
     """threat_r 은 스칼라 또는 반경 목록. 반경은 **채점에만** 쓰이고 정책에는 전혀
@@ -164,6 +178,7 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     튜닝 시드와 보고 시드의 결과가 소수점까지 일치). 시드 분리로 과적합을 막으려면
     다른 변동원이 필요하다. 표준 방식대로 시작 시 무작위 no-op 을 넣는다.
     """
+    takes_vel = _takes_vel(policy)
     obs = env.reset(seed=int(rng.integers(0, 2**31)) if rng else 0)
     if noop_start and rng is not None:
         for _ in range(int(rng.integers(1, noop_start + 1))):
@@ -214,9 +229,12 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
                 for i in list(op):           # 반경 밖으로 나갔거나 사라진 사건은 종료
                     if i not in near: del op[i]
 
-        try:
+        # 🔴 예전엔 try/except TypeError 로 분기했다. 그러면 정책 **안에서** 난
+        #   진짜 TypeError 까지 삼켜서, 관성 보정이 조용히 꺼진 채로 계속 돈다.
+        #   에러 없이 그럴듯하게 도는 그 패턴이다 (§11 함정 표). 서명을 검사한다.
+        if takes_vel:
             action, ch = policy(looms, ori, actions, vel=V.ship_v)
-        except TypeError:            # vel 을 안 받는 옛 정책 (가만히 있기/무작위)
+        else:
             action, ch = policy(looms, ori, actions)
         n_dec += 1
         if actions[action] == "UP": n_up += 1

@@ -51,6 +51,8 @@ def run(pol, seed0):
 
 def heading_gap(pol, seed0):
     """가려는 방향 vs 실제 가는 방향. 결정마다 잰다."""
+    from play import _takes_vel
+    takes = _takes_vel(pol)
     rng = np.random.default_rng(seed0)
     gaps = []
     for _ in range(N_EP):
@@ -70,8 +72,8 @@ def heading_gap(pol, seed0):
             for o in env.objects:
                 if o and type(o).__name__ == "Player" and o.wh[0] > 0:
                     ori = int(getattr(o, "orientation", 0)); break
-            try:    a, ch = pol(looms, ori, A, vel=V.ship_v)
-            except TypeError: a, ch = pol(looms, ori, A)
+            a, ch = (pol(looms, ori, A, vel=V.ship_v) if takes else
+                     pol(looms, ori, A))
             if ch.get("norm", 0) > 1e-9 and prev is not None:
                 # '가려는 방향' 은 보정 전의 **회피 방향**으로 고정해서 잰다.
                 # 보정판을 자기 보정 목표로 채점하면 당연히 잘 나온다 (자기 채점 금지).
