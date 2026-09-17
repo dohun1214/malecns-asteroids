@@ -176,3 +176,34 @@ class LC4Map:
         idx = np.fromiter(acc.keys(), np.int64, len(acc))
         rate = np.fromiter(acc.values(), np.float32, len(acc))
         return idx, np.minimum(rate, cap_hz)
+
+
+class LC10aMap(LC4Map):
+    """방위각 -> LC10a 자극. **LC4Map 과 같은 규칙을 그대로 쓴다** (게이트 4, 20문서).
+
+    새 상수를 하나도 안 만드는 것이 요점이다:
+      - 축       LC4 가 찾은 theta_L 을 그대로 (같은 육각 좌표 틀)
+      - 위치     2단 전파 (`lc10a_position.py`)
+      - 부호화   LC4 와 같은 포화형 rate = cap * theta/(theta + th50), 같은 th50/cap
+      - k        LC4 와 같은 값
+
+    LC4 와 **다른 점은 하나뿐**이고, 그건 상수를 더하는 게 아니라 **빼는** 것이다:
+      🔴 `dtheta > 0` (접근 중) 게이트를 **쓰지 않는다.**
+         LC4 는 looming 검출기라 확대 방향에 선택적이지만, LC10a 는 문헌상
+         **움직이는 표적**에 반응한다 ("enhancing their sensitivity to moving targets",
+         Hindmarsh Sten 2021). 멀어지는 표적도 쫓는다. 게이트를 빼면 선택이 하나 줄어든다.
+
+    ⚠️ 08문서 §8.4 의 부과값 4건은 그대로 진다 (각성 게이팅 없음이 제일 무겁다).
+    """
+
+    def rates(self, looms, n_neurons, th50, cap_hz, min_dtheta=None):
+        acc = {}
+        for L in looms:
+            r = cap_hz*L["theta"]/(L["theta"] + th50)
+            for c in self.cells_for(L["phi_rel"]):
+                acc[int(c)] = acc.get(int(c), 0.0) + r
+        if not acc:
+            return np.empty(0, np.int64), np.empty(0, np.float32)
+        idx = np.fromiter(acc.keys(), np.int64, len(acc))
+        rate = np.fromiter(acc.values(), np.float32, len(acc))
+        return idx, np.minimum(rate, cap_hz)
