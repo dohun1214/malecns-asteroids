@@ -88,9 +88,15 @@ class Decoder:
         psi_escape = psi_threat + 180.0                      # ← 반대로 간다
         head = (ORIENT0_DEG + DEG_PER_ORIENT*orientation) % 360.0
         world = (head - psi_escape) % 360.0                  # 몸 오른쪽 = 세계각 감소
+        # [버그 이력] 예전엔 목표를 16방위로 먼저 반올림하고 정수 차이를 썼다.
+        #   diff = (tgt - ori + 8) % 16 - 8  은 범위가 **-8..+7** 이라 칸이 하나 비대칭이다.
+        #   diff = -8 은 '정반대 방향'이라 좌우 어디로 돌든 같은데 **항상 RIGHT** 로 갔다.
+        #   순수 산술만으로 우회전이 53.8%(slop=1) 가 된다 (probe_bias.py D).
+        # -> 반올림 전의 연속 각도로 판단한다. 정확히 ±180 일 때만 진짜 동점이고,
+        #    연속값이라 사실상 안 나온다. tgt 는 표시용으로만 남긴다.
+        ddeg = ((world - ORIENT0_DEG) - DEG_PER_ORIENT*orientation + 180.0) % 360.0 - 180.0
         tgt = int(round((world - ORIENT0_DEG)/DEG_PER_ORIENT)) % 16
-        diff = (tgt - orientation + 8) % 16 - 8              # -8..7
-        if abs(diff) <= self.align_slop:
+        if abs(ddeg) <= (self.align_slop + 0.5)*DEG_PER_ORIENT:
             return actions.index("UP"), tgt, "추진"
         # probe_heading: LEFT 가 orientation 을 증가시킨다 (반시계)
-        return (actions.index("LEFT") if diff > 0 else actions.index("RIGHT")), tgt, "회전"
+        return (actions.index("LEFT") if ddeg > 0 else actions.index("RIGHT")), tgt, "회전"
