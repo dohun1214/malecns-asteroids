@@ -88,7 +88,8 @@
           <span><i class="dot" style="background:var(--g3)"></i>하행뉴런</span>
           <span><i class="dot" style="background:var(--g4)"></i>VNC 판독</span>
         </span>
-        <span class="r num" id="r_pts">—</span></div>
+        <span class="r num"><span id="r_dead" style="color:var(--alarm)"></span>
+        <span id="r_pts" style="margin-left:10px">—</span></span></div>
       <div class="pb" id="brainwrap"><canvas id="brain"></canvas></div>
     </div>
   </div>
@@ -262,6 +263,8 @@ function overlay(w,h){
 
 /* ---------------- 작은 패널 ---------------- */
 const hist = {loom:[], raster:[], fore:[], lat:[]};
+const bandMax = [1, 1, 1, 1];
+let deadN = 0;
 let S = null;
 function px(c){ return c.getContext("2d"); }
 function clear(c){ const g=px(c); g.clearRect(0,0,c.width,c.height); return g; }
@@ -278,18 +281,25 @@ function drawPanels(){
   g.fillStyle="#8b989f"; g.font=`${11*dpr}px ui-monospace`;
   g.fillText(`최대 각크기 ${mx.toFixed(1)}°`, 6*dpr, 14*dpr);
 
-  // ② 래스터 (4밴드)
+  // ② 래스터 — 서버가 보낸 **실제 그룹 발화율(Hz)**. 라벨과 내용이 같아야 한다.
   c=$("#raster"); g=clear(c);
-  const bands=["LC4","LPLC2","DN","VNC"], bh=c.height/4;
+  const BN=[["LC4","lc4","#4fd1c5"],["DNp02","dnp02","#ffd166"],
+            ["DNp11","dnp11","#6aa9ff"],["VNC 판독","vnc","#c792ea"]];
+  const bh=c.height/4;
   hist.raster.forEach((col,i)=>{
     const x=c.width*i/120;
     for(let b=0;b<4;b++){
-      const v=col[b]; if(!v) continue;
-      g.fillStyle=["#4fd1c5","#6aa9ff","#ffd166","#c792ea"][b];
-      g.globalAlpha=Math.min(1,v); g.fillRect(x,b*bh+2,Math.max(1,c.width/120),bh-4);
+      const v=col[b]/Math.max(bandMax[b],1e-6); if(!(v>0)) continue;
+      g.fillStyle=BN[b][2];
+      g.globalAlpha=Math.min(1,0.12+0.88*v);
+      g.fillRect(x,b*bh+2,Math.max(1,c.width/120),bh-4);
     }});
-  g.globalAlpha=1; g.fillStyle="#8b989f"; g.font=`${10*dpr}px ui-monospace`;
-  bands.forEach((b,i)=>g.fillText(b,4*dpr,(i+0.6)*bh));
+  g.globalAlpha=1; g.font=`${10*dpr}px ui-monospace`;
+  BN.forEach(([lab,,col],i)=>{
+    g.fillStyle=col;   g.fillText(lab, 4*dpr, (i+0.45)*bh+6*dpr);
+    g.fillStyle="#8b989f";
+    g.fillText(`${bandMax[i].toFixed(0)}Hz`, 4*dpr, (i+0.45)*bh+18*dpr);
+  });
 
   // ③ 집단 벡터
   c=$("#vec"); g=clear(c);
@@ -363,11 +373,11 @@ function onStatus(s){
             $("#r_dec").textContent = `전후 ${s.ch.fore.toFixed(2)}  좌우 ${s.ch.lateral.toFixed(2)}`; }
   const mx = s.looms?.length ? Math.max(...s.looms.map(l=>l.th)) : 0;
   hist.loom.push(mx); if(hist.loom.length>200) hist.loom.shift();
-  if(s.ch){
-    hist.raster.push([Math.min(1,mx/20), Math.min(1,s.ch.intensity*2),
-                      Math.min(1,(Math.abs(s.ch.p02_L)+Math.abs(s.ch.p11_L))/2),
-                      Math.min(1,s.ch.intensity*3)]);
-    if(hist.raster.length>120) hist.raster.shift();
+  if(s.rates){
+    const v = [s.rates.lc4, s.rates.dnp02, s.rates.dnp11, s.rates.vnc];
+    hist.raster.push(v); if(hist.raster.length>120) hist.raster.shift();
+    // 밴드별 러닝 맥스 (천천히 내려간다). 눈금을 화면에 같이 찍어서 스케일을 숨기지 않는다.
+    for(let b=0;b<4;b++) bandMax[b] = Math.max(v[b], bandMax[b]*0.995, 1);
   }
   // 병변 표시
   const on = new Set(s.lesion||[]);
@@ -376,18 +386,17 @@ function onStatus(s){
   const chip = $("#chip");
   chip.textContent = on.size ? "병변: "+[...on].join(" · ") : "정상 회로";
   chip.className = on.size ? "on" : "";
-  if(window._dead && pts){
-    const dead=window._dead, grp=window._grp;
-    const gset = new Set(); // 1=LC4 3=DN 4=VNC
-    if(on.has("LC4half")) gset.add(1);
-    if(on.has("DNp11")||on.has("DNp02")||on.has("DNp01")) gset.add(3);
-    let ch=false;
-    for(let i=0;i<dead.length;i++){
-      const v = gset.has(grp[i]) ? 1 : 0;
-      if(dead[i]!==v){ dead[i]=v; ch=true; }
-    }
-    if(ch) pts.geometry.attributes.aDead.needsUpdate = true;
+  // 죽은 색은 **서버가 보낸 꺼진 뉴런의 점 인덱스**로만 칠한다.
+  // [버그 이력] 그룹 단위로 칠했더니 DNp11 2개를 껐는데 하행뉴런 18개가 전부 죽은 색이 됐다.
+  //   주장이 "2개만 껐다"인데 화면이 18개라고 말하면 안 된다.
+  if(s.dead && window._dead && pts){
+    const dead = window._dead;
+    dead.fill(0);
+    for(const i of s.dead) if(i >= 0 && i < dead.length) dead[i] = 1;
+    deadN = s.dead.length;
+    pts.geometry.attributes.aDead.needsUpdate = true;
   }
+  $("#r_dead").textContent = deadN ? `${deadN.toLocaleString()} 꺼짐` : "";
 }
 document.querySelectorAll(".bar button[data-g]").forEach(b=>b.onclick=()=>{
   const on = b.getAttribute("aria-pressed")!=="true";

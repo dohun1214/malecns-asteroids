@@ -66,6 +66,21 @@ class Sim(threading.Thread):
     def setup(self):
         self.bp = BrainPolicy()
         self.C = self.bp.C
+        # 래스터에 쓸 '실제' 그룹별 스파이크 집계용 인덱스.
+        # [버그 이력] 예전엔 LC4 밴드에 운석 각크기를, LPLC2 밴드에 판독 강도를 그렸다.
+        #   라벨과 내용이 달라서 "LC4 를 끄면 밴드가 사라진다"가 성립하지 않았다.
+        #   집계는 tally 에 이미 다 있다. 그대로 센다.
+        R_ = np.load(ROOT/"graph"/"vnc_readout.npz", allow_pickle=True)
+        # 밴드 선택: 우리가 자극하는 건 LC4 뿐이라 **LPLC2 는 항상 0 이다.**
+        # 늘 비어 있는 밴드를 라벨만 붙여 두면 화면이 고장난 것처럼 보인다.
+        # 대신 이 데모의 이야기 그대로 LC4 -> DNp02 / DNp11 -> VNC 판독을 쌓는다.
+        self.grp_idx = dict(lc4=np.asarray(self.C["LC4"]),
+                            dnp02=np.asarray(self.C["DNp02"]),
+                            dnp11=np.asarray(self.C["DNp11"]),
+                            vnc=np.concatenate([R_["dn02_only"], R_["dn11_only"]]))
+        self.sec = STEPS_PER_DECISION*0.2/1000.0
+        self._dead_v = 0
+        self._dead_pts = []
         self.env = make_env()
         self.A = self.env.unwrapped.get_action_meanings()
         self.V = Vision()
@@ -107,13 +122,26 @@ class Sim(threading.Thread):
         self.bp.b.packed.copy_(self.packed0)
         self.lesion.clear()
 
+    def refresh_dead(self):
+        """꺼진 뉴런의 **점 인덱스**를 다시 계산한다.
+        [버그 이력] 클라이언트가 '그룹 단위'로 죽은 색을 칠하던 걸 고친다.
+          DNp11 2개를 껐는데 하행뉴런 18개가 전부 죽은 색이 됐다.
+          이 데모의 주장이 '2개만 껐다'인데 화면이 18개라고 말하면 안 된다.
+        alive 텐서가 유일한 진실이므로 거기서 직접 뽑는다 (그룹 조합·복구 전부 자동으로 맞는다)."""
+        al = self.bp.b.alive.cpu().numpy()
+        pts = self.pt_of[np.flatnonzero(al == 0)]
+        self._dead_pts = sorted(int(x) for x in pts[pts >= 0])
+        self._dead_v += 1
+
     def drain(self):
+        n = 0
         while self.cmds:
             c = self.cmds.popleft()
             k = c.get("cmd")
-            if k == "lesion": self.apply(c["group"], bool(c["on"]))
-            elif k == "restore": self.restore()
+            if k == "lesion": self.apply(c["group"], bool(c["on"])); n += 1
+            elif k == "restore": self.restore(); n += 1
             elif k == "newgame": self._new = True
+        if n: self.refresh_dead()
 
     def run(self):
         self.setup()
@@ -193,7 +221,10 @@ class Sim(threading.Thread):
             a = np.ascontiguousarray(obs, dtype=np.uint8)
             h, w = a.shape[0], a.shape[1]
             vid = struct.pack("<III", MAGIC_VID, step, (w << 16) | h) + a.tobytes()
-        st = dict(step=step, score=score, ship_age=int(self._objs_age), lives=info.get("lives") if isinstance(info, dict) else None,
+        rates = {k: round(float(tal[v].sum())/len(v)/self.sec, 1)
+                 for k, v in self.grp_idx.items()}          # 그룹 평균 발화율 (Hz)
+        st = dict(step=step, score=score, ship_age=int(self._objs_age),
+                  rates=rates, dead_v=self._dead_v, lives=info.get("lives") if isinstance(info, dict) else None,
                   fps=round(fps, 1), ms_brain=round(ms_brain, 2), ms_frame=round(ms_frame, 2),
                   spikes=int(len(pts)), n_fired=int(fired.size),
                   action=self.A[action], ori=ori, heading=round(ship_heading_deg(ori), 1),
@@ -208,6 +239,9 @@ class Sim(threading.Thread):
                             [round(float(x), 4) for x in ch[k]])
                         for k in ("fore", "lateral", "intensity", "norm", "unit",
                                   "p02_L", "p02_R", "p11_L", "p11_R", "p04")}
+        if self._dead_v != getattr(self, "_dead_sent", -1):
+            st["dead"] = self._dead_pts          # 바뀔 때만 보낸다
+            self._dead_sent = self._dead_v
         self.box.put((spk, vid, json.dumps(st, ensure_ascii=False)))
 
 
@@ -220,6 +254,7 @@ async def main():
 
     async def handler(ws):
         clients.add(ws)
+        sim._dead_sent = -1          # 새 클라이언트에 죽은 점 목록을 다시 보낸다
         try:
             meta = json.loads((WEB/"soma_meta.json").read_text(encoding="utf-8"))
             await ws.send(json.dumps(dict(type="hello", **meta,
