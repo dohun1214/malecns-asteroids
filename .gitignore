@@ -6,3 +6,7 @@ graph/
 out/*.npy
 *.log
 *.err
+out/rec/*.rgb
+out/rec/*.npy
+out/rec/*.png
+out/rec/*.mp4
