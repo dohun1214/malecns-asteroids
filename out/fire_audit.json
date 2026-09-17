@@ -1,0 +1,121 @@
+{
+  "map_ok": true,
+  "pattern": [
+    "FIRE",
+    "FIRE",
+    "-",
+    "-",
+    "FIRE",
+    "FIRE",
+    "-",
+    "-",
+    "FIRE",
+    "FIRE",
+    "-",
+    "-",
+    "FIRE",
+    "FIRE",
+    "-",
+    "-"
+  ],
+  "press0": {
+    "shots": 0,
+    "score": 110.0,
+    "ast_drop": 5,
+    "waves": 0,
+    "frames": 2183
+  },
+  "press1": {
+    "shots": 117,
+    "score": 2350.0,
+    "ast_drop": 23,
+    "waves": 1,
+    "frames": 2781
+  },
+  "press2": {
+    "shots": 117,
+    "score": 2350.0,
+    "ast_drop": 23,
+    "waves": 1,
+    "frames": 2781
+  },
+  "press3": {
+    "shots": 1,
+    "score": 110.0,
+    "ast_drop": 5,
+    "waves": 0,
+    "frames": 2183
+  },
+  "press4": {
+    "shots": 1,
+    "score": 110.0,
+    "ast_drop": 5,
+    "waves": 0,
+    "frames": 2183
+  },
+  "pol_가만히 있기": {
+    "on": {
+      "shots": 68,
+      "score": 80.0,
+      "ast_drop": 4,
+      "waves": 0,
+      "frames": 2000
+    },
+    "off": {
+      "shots": 0,
+      "score": 20.0,
+      "ast_drop": 4,
+      "waves": 0,
+      "frames": 2000
+    }
+  },
+  "pol_무작위": {
+    "on": {
+      "shots": 37,
+      "score": 630.0,
+      "ast_drop": 7,
+      "waves": 0,
+      "frames": 2000
+    },
+    "off": {
+      "shots": 37,
+      "score": 680.0,
+      "ast_drop": 9,
+      "waves": 0,
+      "frames": 2000
+    }
+  },
+  "pol_규칙 기반": {
+    "on": {
+      "shots": 84,
+      "score": 830.0,
+      "ast_drop": 9,
+      "waves": 0,
+      "frames": 2000
+    },
+    "off": {
+      "shots": 0,
+      "score": 70.0,
+      "ast_drop": 4,
+      "waves": 0,
+      "frames": 2000
+    }
+  },
+  "pol_전체 뇌": {
+    "on": {
+      "shots": 90,
+      "score": 1350.0,
+      "ast_drop": 12,
+      "waves": 1,
+      "frames": 2000
+    },
+    "off": {
+      "shots": 0,
+      "score": 60.0,
+      "ast_drop": 5,
+      "waves": 0,
+      "frames": 2000
+    }
+  },
+  "leak": false
+}

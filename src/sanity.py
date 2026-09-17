@@ -144,6 +144,32 @@ chk("액션이 한쪽으로 안 죽었다", min(acts["UP"], acts["LEFT"], acts["
 chk("판독이 상수로 안 굳었다", float(chan[:, 0].std()) > 1e-6 and float(chan[:, 1].std()) > 1e-6,
     f"좌우 sd {chan[:,0].std():.4f} 전후 sd {chan[:,1].std():.4f}", "> 0")
 
+# ── 발사 위상 취약성 검사 (fire_audit2.py 에서 드러난 것) ──────────────────
+#   무작위 no-op 시작이 결정 경계와 ROM 폴링 위상을 매번 어긋나게 한다.
+#   FIRE_PRESS=1 이면 **전 시드에서 0발**, =4 면 1발이다 (실측).
+#   위 검사는 시드 하나만 보므로 이 취약성을 못 잡는다.
+#   🔴 '총알이 보이는 프레임 수' 로 세면 안 된다 — 한 발만 쏴도 오래 떠 있어서
+#      press=4(=옛 버그)도 통과한다. **새로 생긴 총알 수(발사 수)** 로 센다.
+def quick_shots(seed, base_name, frames=900):
+    rng2 = np.random.default_rng(seed)
+    env.reset(seed=int(rng2.integers(0, 2**31)))
+    for _ in range(int(rng2.integers(1, 31))): env.step(A.index("NOOP"))
+    b = A.index(base_name); act = (b, with_fire(b, A)); n = 0; prev = 0
+    for f in range(frames):
+        env.step(frame_action(act[0], act[1], f))
+        m = sum(1 for o in env.objects if o and o.wh[0] > 0
+                and "Missile" in type(o).__name__)
+        if m > prev: n += m - prev
+        prev = m
+    return n
+
+
+fire_seeds = [quick_shots(s_, b_) for s_ in (11, 33, 44) for b_ in ("NOOP", "LEFT")]
+chk("발사가 시드에 안 흔들린다", min(fire_seeds) >= 10,
+    f"시드3 x base2 발사 수 최소 {min(fire_seeds)} (전부 {fire_seeds})", ">= 10")
+
+
+
 bias = (acts["LEFT"] - acts["RIGHT"])/max(turn, 1)
 say("")
 say("기록 (임계값 아님)")
