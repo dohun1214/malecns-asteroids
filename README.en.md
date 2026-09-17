@@ -3,12 +3,14 @@
 # malecns-asteroids
 
 **All 166,700 neurons of a fruit-fly connectome, simulated in real time, playing Atari Asteroids.**<br>
-Silence **two cells** from the browser and watch the escape behaviour collapse on the spot.
+Put the fly's **escape circuit** or its **pursuit circuit** on the joystick,<br>
+then silence **two cells** from the browser and watch that behaviour collapse on the spot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-Triton-76B900.svg)](https://triton-lang.org/)
 [![Realtime 7.3x](https://img.shields.io/badge/realtime-7.3%C3%97-brightgreen.svg)](#performance)
+[![Double dissociation](https://img.shields.io/badge/double_dissociation-0%25_vs_−100%25-ff6b5e.svg)](#-same-cells-off-0--in-one-mode-100--in-the-other--a-double-dissociation)
 
 [한국어](README.md) · [Quick start](#quick-start) · [Evidence](#evidence) · [Honest limitations](#honest-limitations)
 
@@ -23,6 +25,17 @@ This runs the **MaleCNS v1.0 connectome** released by Google/Janelia
 On-screen asteroid positions are injected into **LC4 visual projection neurons**; the escape
 direction is read out from the **507 VNC motor cells downstream of DNp02 / DNp11** and turned
 into joystick actions. Everything runs inside a **real-time 60 fps** budget.
+
+The same brain has **two modes**. Both run all 166,700 neurons — a mode selects *which readout
+is wired to the joystick*, it does not switch any neuron off.
+
+| Mode | Circuit | Behaviour |
+|---|---|---|
+| **Flee** | `LC4 → DNp02/DNp11 → 507 VNC cells` | turns **away** from the threat |
+| **Chase** | `LC10a → AOTU019/025 → DNa02·13·15 → 1,076 cells` | turns **toward** the target |
+
+We did not choose the sign of the chase steering signal — it falls out of the wiring:
+**AOTU025 is excitatory and ipsilateral, AOTU019 is inhibitory and contralateral.**
 
 ## Why this exists
 
@@ -92,6 +105,40 @@ An MLP with the same input and a matched parameter count, **randomly initialised
 > A **supervised** MLP trained on ground truth reaches 43.6° on the same held-out set, beating the
 > fly's 56.2°. That is not a refutation — **the fly never saw a label.** We report it anyway.
 
+### ⑤ Same cells off: 0 % in one mode, −100 % in the other — a double dissociation
+
+A one-way dissociation ("switch it off and it breaks") cannot rule out *"anything you switch off
+breaks it."* Switching off **the same 275 cells** and getting opposite results per mode can.
+
+| | Aiming (on-target fraction) | Avoidance (frames per life) |
+|---|---:|---:|
+| **Flee** mode, LC10a off | **+0.0 %** (identical to the decimal) | **+0.0 %** |
+| Flee mode, DNp11 off | −1.4 % | **−10.5 %** |
+| **Chase** mode, LC10a off | **−100.0 %** | −56.7 % |
+| Chase mode, DNp11 off | −4.1 % | −23.0 % |
+
+The nose really does turn: angular distance to the nearest asteroid goes **114.3° → 62.2°**.
+As a negative control, silencing **the same number (275) of random cells** only costs
+8.2 ± 1.4 % (−28.6 %) across 5 seeds — LC10a is **3.5× stronger per cell**.
+
+**And the direction disappears without switching off a single cell.**
+Shuffling only the **335 edges** of `LC10a → AOTU019/025` (0.0032 % of the graph), 10 seeds:
+
+| Fraction rewired | 10 % | 25 % | 50 % | 75 % | 90 % | **100 %** |
+|---|---:|---:|---:|---:|---:|---:|
+| Directional information lost | 1.5 % | 4.2 % | 12.5 % | 27.4 % | 32.0 % | **60.1 %** |
+| Signal amplitude retained | 106 % | 98 % | 87 % | 72 % | 67 % | **51.9 %** |
+
+| Control (100 %, 10 seeds) | Information lost |
+|---|---:|
+| Same edge count, **other LC10a outputs** | 1.5 % |
+| **Escape circuit** (LC4→DN) shuffled | 0.0 % |
+| Size-matched random excitatory edges | −0.1 % |
+
+**A lesion left 0 % of the signal** — which invites "you just cut the input". Rewiring leaves the
+signal intact and removes only its direction. In the actual game, aiming drops **−52.9 %**
+(5.4 ± 1.1 %, 6 seeds) while **100 % of decisions still carry a steering signal.**
+
 ---
 
 ## Performance
@@ -156,7 +203,7 @@ Open it in a browser and **switch neurons off yourself.**
 ├──────────┬─────────────┴─┬───────────┬─────────────────┤
 │ LC4 looming │ spike raster │ pop. vector │ decoder x4   │
 ├────────────────────────────────────────────────────────┤
-│ DNp11 off · DNp02 off · GF off · half LC4 · shuffle LC4 │
+│ [flee|chase] │ per-mode lesion buttons · shuffle · restore  │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -165,6 +212,11 @@ Open it in a browser and **switch neurons off yourself.**
   recapture is needed — 29.5 µs
 - Silenced cells go dark **per cell, not per group** (switch off 2, exactly 2 turn dark)
 - The `분기 영상` button plays the three branch videos from ③
+- **`Flee / Chase` toggle** — both brains stay resident and only the readout is swapped
+  (fps 60.0 holds). Buttons, raster bands, population vector and decoder bars all switch per mode
+  - Flee: `DNp11` `DNp02` `Giant Fiber` `half LC4` `shuffle LC4 wiring`
+  - Chase: `LC10a` `shuffle LC10a wiring` `DNp11`
+  - Lesions are applied to **both brains**, so state never desyncs when you switch modes
 
 ---
 
@@ -182,7 +234,9 @@ screen ─▶ Vision ─▶ LC4Map ─▶ [ 166,700-neuron LIF ] ─▶ Decoder 
 | `lif_rt.py` | whole-brain LIF | event-driven Triton kernels, packed int32 edges, 333-step unrolled CUDA Graph |
 | `vision.py` | screen → stimulus | azimuth, angular size, expansion — **pure geometry, zero fitted constants** |
 | `decode.py` | spikes → action | readout from 507 VNC cells (reading DNs directly is tautological) |
-| `play.py` | game loop | 60 Hz pacing, one decision every 4 frames |
+| `lc10a_position.py` | LC10a receptive fields | **two-stage hex-coordinate propagation** — only 0.9 % of LC10a input carries coordinates |
+| `pursuit_targets.py` | pursuit readout | 550 left / 526 right VNC cells; cross-projection under 0.1 % |
+| `play.py` | game loop | 60 Hz pacing, one decision every 4 frames. `BrainPolicy` (flee) / `PursuitPolicy` (chase) |
 | `server.py` | dashboard server | 60 Hz sim thread + single-slot mailbox + WebSocket |
 | `sanity.py` | automated checks | 9 assertions **plus a self-test** |
 
@@ -208,7 +262,12 @@ This repository also records **what does not work**. That is part of the evidenc
 | Left-turn bias of +22.4 %p | ⏸ Diagnosed: not LC4 cell count, but **per-cell synaptic strength (right 10 % stronger)** and a **39 % mismatch in DN→readout ipsi/contra ratio**. Deliberately **not corrected**, to avoid adding a fitted constant |
 | Escape direction error of 82.8° | ⏸ Still large after inertia compensation. The dominant cause is that **the target moves faster than the ship can turn** (55 % of target changes exceed the 22.5° per-decision turn). Structural, given the real-time budget |
 | A supervised MLP does better | ⏸ 43.6° vs 56.2°. Not a refutation, but we do not claim the connectome is optimal |
-| Sign of the fore/aft axis | ⚠️ The one imposed value. Confirmed indirectly by behaviour (it flees threats) |
+| Sign of the fore/aft axis | ⚠️ An imposed value. Confirmed indirectly by behaviour (it flees threats) |
+| **No arousal gating in chase mode** | ⚠️ The literature reports *"almost no response"* from LC10a without arousal. Our model has no P1 and no internal state, so it assumes the fly is **always aroused**. The heaviest imposed assumption in gate 4 |
+| LC10a is a **courtship pursuit** circuit, not a gun | ⚠️ The same class of analogy as using an escape circuit to dodge asteroids, but a stronger one. No paper says LC10a aims anything |
+| The medial/lateral **label** for AOTU019 | ❓ The literature puts AOTU019 on the central visual field; our coordinates say the opposite. The *subset separation* replicates in both hemispheres (p = 0.0034), but we make **no claim about which end is central** |
+| **Seed spread at 100 % rewire** | ⚠️ r = −0.381 ± 0.374 (5 of 10 seeds above −0.5). The dose response is monotonic, but 100 % is noisy. *Our first estimate used 3 seeds and **overstated** the loss as 85.8 %; 10 seeds corrected it to 60.1 %* |
+| Chase mode does **not** thrust | ⏸ Steering only. Adding thrust would need a new readout channel and a new alignment criterion — two new choices |
 
 ### 🔴 The same class of trap caught us four times
 
@@ -238,6 +297,14 @@ things **actually happen**.
 ```
 src/
   lif_rt.py        whole-brain LIF + Triton kernels + CUDA Graph
+  gate4_sweep.py   gate 4 - pursuit azimuth sweep
+  gate4_dissoc.py  gate 4 - double dissociation (2 modes x 3 lesions)
+  gate4_control.py gate 4 - random-275-cell negative control
+  gate4_rewire*.py gate 4 - LC10a->AOTU rewire (sweep / in-game)
+  lc10a_position.py  LC10a two-stage coordinate propagation
+  pursuit_targets.py pursuit readout (connectivity specificity)
+  fire_aim.py      aiming measurement (with random-heading control)
+  fire_ceiling.py  fire cap + perfect-aim ceiling
   vision.py        screen -> azimuth / angular size / expansion, LC4Map
   decode.py        VNC readout -> escape vector -> action
   play.py          game loop and policies (brain / rule-based / random)
@@ -262,6 +329,9 @@ out/               measurement results as JSON
 - Jang & von Reyn 2023, *JEB* — [Azimuthal invariance in the GF escape circuit](https://journals.biologists.com/jeb/article/226/8/jeb244790/307120)
 - Shiu et al. 2024, *Nature* — [Whole-brain LIF model](https://www.nature.com/articles/s41586-024-07763-9)
 - Nern et al. 2025, *Nature* — [Connectome-driven neural inventory of a complete visual system](https://www.nature.com/articles/s41586-025-08746-0)
+- Wilson Lab 2026, *Neuron* — [Specialized parallel pathways for adaptive control of visual object pursuit](https://www.cell.com/neuron/fulltext/S0896-6273(26)00001-2) ← key citation for chase mode
+- Hindmarsh Sten et al. 2021, *Nature* — [Sexual arousal gates visual processing during courtship](https://www.nature.com/articles/s41586-021-03714-w)
+- Ribeiro et al. 2018, *Cell* — [Visual projection neurons mediating directed courtship](https://www.cell.com/cell/fulltext/S0092-8674(18)30788-8)
 - Tools: [OC_Atari](https://github.com/k4ntz/OC_Atari) · [ALE](https://ale.farama.org/environments/asteroids/) · [Triton](https://triton-lang.org/) · [three.js](https://threejs.org/)
 
 ## License
