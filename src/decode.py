@@ -76,6 +76,10 @@ class Decoder:
         n = np.hypot(lateral, fore)
         return dict(lateral=lateral, fore=fore, intensity=r["inten"], norm=n,
                     unit=(lateral/n, fore/n) if n > 1e-9 else (0.0, 0.0),
+                    # 집단 투표를 화면에 그리려면 **합친 채널이 아니라 집단별 값**이 필요하다.
+                    # l/r 은 해부학적 좌/우 판독 집단이고, 교차 투사 때문에
+                    # 좌측 집단이 '오른쪽 위협'을 뜻한다 (10문서 §3).
+                    l=r["l"], r=r["r"],
                     **{k: r[k] for k in ("p02_L","p02_R","p11_L","p11_R","p04","a02","a11")})
 
     def action(self, ch, orientation, actions):

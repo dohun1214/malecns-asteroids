@@ -254,7 +254,8 @@ class Sim(threading.Thread):
             st["ch"] = {k: (round(float(ch[k]), 4) if not isinstance(ch[k], tuple) else
                             [round(float(x), 4) for x in ch[k]])
                         for k in ("fore", "lateral", "intensity", "norm", "unit",
-                                  "p02_L", "p02_R", "p11_L", "p11_R", "p04")}
+                                  "p02_L", "p02_R", "p11_L", "p11_R", "p04",
+                                  "a02", "a11", "l", "r")}
         if self._dead_v != getattr(self, "_dead_sent", -1):
             st["dead"] = self._dead_pts          # 바뀔 때만 보낸다
             self._dead_sent = self._dead_v
