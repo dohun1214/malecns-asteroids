@@ -35,11 +35,18 @@ class Vision:
     def __init__(self, dt_frames=4):
         self.dt_frames = dt_frames
         self.prev_ship = None
+        # 배 속도 (수학 좌표, 종횡비 보정, 결정 간격당 픽셀).
+        # [실측] 이 게임은 관성이 있다 — 추진을 끊어도 3초 뒤까지 속도의 67% 가 남고
+        #   회전만 해도 유지된다 (probe_inertia.py). 예전에는 이 값을 계산만 하고
+        #   **반환도 사용도 안 했다.** 제어에 속도항이 없어서 가려는 방향과 실제 가는
+        #   방향이 중앙값 90도 어긋났다 (이슈 #36).
+        self.ship_v = (0.0, 0.0)
         self.prev = []            # 이전 결정 시점의 운석 [(x, y, w, h, theta, id)]
         self._next_id = 0
 
     def reset(self):
         self.prev_ship = None; self.prev = []; self._next_id = 0
+        self.ship_v = (0.0, 0.0)
 
     def parse(self, objs):
         ship = None; asts = []
@@ -58,7 +65,7 @@ class Vision:
         ship 이 없으면 (None, None, [])"""
         ship, asts = self.parse(objs)
         if ship is None:
-            self.prev_ship = None
+            self.prev_ship = None; self.ship_v = (0.0, 0.0)
             return None, None, []
         sx, sy = float(ship.xy[0]), float(ship.xy[1])
         head = ship_heading_deg(getattr(ship, "orientation", 0))
@@ -70,6 +77,7 @@ class Vision:
             dx -= 160.0*round(dx/160.0); dy -= 210.0*round(dy/210.0)
             svx, svy = dx, -dy/ASPECT
         self.prev_ship = (sx, sy)
+        self.ship_v = (float(svx), float(svy))
 
         out = []
         cur = []

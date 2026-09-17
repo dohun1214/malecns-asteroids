@@ -51,7 +51,7 @@ def frame_action(base, fire, k, act_every=ACT_EVERY):
 
 class BrainPolicy:
     def __init__(self, lesion=None, th50=7.2, cap=150.0, k=16, min_intensity=0.0,
-                 align_slop=1, hold=0):
+                 align_slop=1, hold=0, inertia=True):
         import pandas as pd
         self.C = dict(np.load(G/"circuit_idx.npz"))
         P = np.load(G/"lc4_position.npz", allow_pickle=True)
@@ -62,6 +62,8 @@ class BrainPolicy:
         self.readout = dict(np.load(G/"vnc_readout.npz", allow_pickle=True))
         self.dec = Decoder(self.C, self.nside, self.readout,
                            align_slop=align_slop, min_intensity=min_intensity)
+        # 관성 보정 (이슈 #36). 끄면 예전 동작 — A/B 비교용으로 남긴다.
+        self.inertia = inertia
         self.hold = hold          # 정렬되면 몇 결정 동안 추진을 유지할지
         self._hold_left = 0
         self.b = BrainRT(params=PARAMS)
@@ -83,7 +85,7 @@ class BrainPolicy:
         if len(idx) == 0: return 0.0
         return float(self._gac[idx].mean())
 
-    def __call__(self, looms, orientation, actions):
+    def __call__(self, looms, orientation, actions, vel=None):
         idx, rates = self.map.rates(looms, self.b.N, self.gain, self.cap)
         self.b.set_poisson_rates(idx, rates)
         self.b.tally.zero_(); self.b.gacc.zero_()
@@ -93,7 +95,8 @@ class BrainPolicy:
         self._tal = self.b.tally.cpu().numpy()
         self._gac = (self.b.gacc/STEPS_PER_DECISION).cpu().numpy()
         ch = self.dec.channels(self.rate_of)
-        a, tgt, st = self.dec.action(ch, orientation, actions)
+        a, tgt, st = self.dec.action(ch, orientation, actions,
+                                     vel=vel if self.inertia else None)
         # 이력: 한 번 정렬되면 hold 결정 동안 추진을 유지한다.
         # 회전이 결정당 22.5도라 정렬 창을 지나쳐 버리는 문제(이슈 #3)에 대한 대응.
         if st == "추진":
@@ -120,9 +123,10 @@ class BrainPolicy:
 
 class GreedyPolicy:
     """같은 기하학, 뇌 없음. 팽창률 가중 위협 벡터의 반대로 간다."""
-    def __init__(self, min_dtheta=0.0):
+    def __init__(self, min_dtheta=0.0, inertia=True):
         self.min_dtheta = min_dtheta
-    def __call__(self, looms, orientation, actions):
+        self.inertia = inertia
+    def __call__(self, looms, orientation, actions, vel=None):
         lat = fore = w = 0.0
         for L in looms:
             if L["dtheta"] <= self.min_dtheta: continue
@@ -134,7 +138,15 @@ class GreedyPolicy:
             return actions.index("NOOP"), ch
         psi_e = np.degrees(np.arctan2(lat, fore)) + 180.0
         head = ship_heading_deg(orientation)
-        tgt = int(round((((head - psi_e) % 360.0) - 90.0)/22.5)) % 16
+        world = (head - psi_e) % 360.0
+        if self.inertia and vel is not None:                 # 뇌 쪽과 같은 보정
+            vx, vy = float(vel[0]), float(vel[1]); spd = float(np.hypot(vx, vy))
+            if spd > 1e-6:
+                wx, wy = np.cos(np.radians(world)), np.sin(np.radians(world))
+                tx, ty = wx*spd - vx, wy*spd - vy
+                if np.hypot(tx, ty) > 1e-6:
+                    world = np.degrees(np.arctan2(ty, tx)) % 360.0
+        tgt = int(round((world - 90.0)/22.5)) % 16
         diff = (tgt - orientation + 8) % 16 - 8
         if abs(diff) <= 1: return actions.index("UP"), ch
         return (actions.index("LEFT") if diff > 0 else actions.index("RIGHT")), ch
@@ -202,7 +214,10 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
                 for i in list(op):           # 반경 밖으로 나갔거나 사라진 사건은 종료
                     if i not in near: del op[i]
 
-        action, ch = policy(looms, ori, actions)
+        try:
+            action, ch = policy(looms, ori, actions, vel=V.ship_v)
+        except TypeError:            # vel 을 안 받는 옛 정책 (가만히 있기/무작위)
+            action, ch = policy(looms, ori, actions)
         n_dec += 1
         if actions[action] == "UP": n_up += 1
         elif actions[action] == "LEFT": n_left += 1

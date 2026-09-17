@@ -64,7 +64,10 @@ def snapshot():
         t=b._t, has_poi=b.has_poi,
         frame=bp.frame, hold=bp._hold_left,
         dec=copy.deepcopy(bp.dec._s),
-        vis=(copy.deepcopy(V.prev_ship), copy.deepcopy(V.prev), V._next_id))
+        # ⚠️ ship_v 도 넣어야 한다. 관성 보정이 이 값을 쓰므로 빠뜨리면
+        #   '같은 시작점' 이 깨지고 바이트 단위 동일 검증이 실패한다 (이슈 #36).
+        vis=(copy.deepcopy(V.prev_ship), copy.deepcopy(V.prev), V._next_id,
+             tuple(V.ship_v)))
 
 
 def restore(s):
@@ -78,6 +81,7 @@ def restore(s):
     bp.dec._s = copy.deepcopy(s["dec"])
     V.prev_ship, V.prev, V._next_id = (copy.deepcopy(s["vis"][0]),
                                        copy.deepcopy(s["vis"][1]), s["vis"][2])
+    V.ship_v = tuple(s["vis"][3]) if len(s["vis"]) > 3 else (0.0, 0.0)
 
 
 # ------------------------------------------------------------------ 주행
@@ -108,7 +112,7 @@ def decide_and_step(sink, n_dec, track=None):
         for o in objs:
             if o and type(o).__name__ == "Player":
                 ori = int(getattr(o, "orientation", 0)); break
-        a, ch = bp(looms, ori, A)          # 배가 없어도 뇌는 항상 돌린다 (06문서 §7)
+        a, ch = bp(looms, ori, A, vel=V.ship_v)   # 배가 없어도 뇌는 항상 돌린다 (06문서 §7)
         acts.append(A[a])
         action = ((A.index("NOOP"), A.index("FIRE")) if xy is None
                   else (a, with_fire(a, A)))
