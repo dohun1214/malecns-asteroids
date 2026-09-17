@@ -91,18 +91,29 @@ class Sim(threading.Thread):
         self.packed_rw = torch.from_numpy(newp.astype(np.int32)).to(self.bp.b.dev)
         self.rng = np.random.default_rng(1234)
 
-    def screen(self):
-        """RGB 화면. OCAtari 의 obs 는 mode 에 따라 RAM/축소화면일 수 있어서 ALE 에서 직접 뽑는다."""
-        e = self.env
-        for get in (getattr(e, "getScreenRGB", None),
-                    getattr(getattr(e, "_env", None), "getScreenRGB", None)):
-            if get is not None:
-                try: return np.asarray(get(), dtype=np.uint8)
-                except Exception: pass
+    def grab(self):
+        """RGB 화면 1장. OCAtari 의 obs 는 mode 에 따라 RAM/축소화면일 수 있어서 ALE 에서 직접 뽑는다."""
         try:
-            return np.asarray(e.unwrapped.ale.getScreenRGB(), dtype=np.uint8)
+            return np.asarray(self.env._env.env.env.ale.getScreenRGB(), dtype=np.uint8)
         except Exception:
             return None
+
+    def screen(self):
+        """[실측] 아타리 2600 은 한 주사선에 여러 스프라이트를 못 그려서 **프레임마다 번갈아
+        그린다.** 켜진 픽셀 수가 1416 / 194 로 매 프레임 진동하고, 운석 스프라이트는
+        **짝수 프레임에만** 그려진다 (probe_flicker.py: 위상 0·2 는 68% 칠해짐, 1·3 은 0%).
+
+        대시보드는 4프레임에 한 장만 보내므로 위상이 고정된다. 하필 안 그리는 위상에 잠기면
+        **운석이 영원히 안 보이고 우리가 덧그린 박스만 남는다.** 실제로 그렇게 보였다.
+        (운석 dx/dy 가 절반의 프레임에서 0이던 것, 배가 20% 안 보이던 것과 같은 계열의 함정)
+
+        -> 연속 2프레임의 **최댓값 합성**. 아타리 전처리의 표준(max over last two frames)이고,
+           CRT + 잔상이 하는 일과 같아서 사람이 실제로 보는 화면에 더 가깝다.
+           실측: 합성 전 60프레임 중 30장이 운석 0% -> 합성 후 0장."""
+        a, b = self._scr2
+        if a is None: return b
+        if b is None: return a
+        return np.maximum(a, b)
 
     def cells(self, g):
         if g == "LC4half": return self.C["LC4"][::2]
@@ -149,6 +160,7 @@ class Sim(threading.Thread):
         period = 1.0/HZ
         self._new = True
         self._objs = None; self._objs_age = 0
+        self._scr2 = [None, None]
         action = A.index("FIRE")
         step = 0; frame = 0; score = 0.0
         t_next = time.perf_counter()
@@ -161,10 +173,12 @@ class Sim(threading.Thread):
                 for _ in range(int(self.rng.integers(1, 31))): env.step(A.index("NOOP"))
                 V.reset(); bp.dec.reset(); bp.b.reset(); bp.frame = 0
                 self._objs = None; self._objs_age = 0
+                self._scr2 = [None, None]
                 score = 0.0; action = A.index("FIRE")
             t0 = time.perf_counter()
             obs, rew, tr, te, info = env.step(action)
             score += float(rew); frame += 1
+            self._scr2 = [self._scr2[1], self.grab()]      # 깜빡임 합성용 2프레임 링
             # [실측/09문서] Player 객체가 **프레임의 절반에서 없다.** 4프레임마다 결정하는
             # 고정 위상 루프는 그 '없는 위상'에 잠겨서 영원히 뇌를 안 돌릴 수 있다.
             # (헤드리스에서는 타이밍이 흔들려 안 걸렸는데 60Hz 고정 페이싱에서 드러났다.

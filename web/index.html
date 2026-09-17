@@ -246,8 +246,15 @@ function drawVideo(buf){
 function overlay(w,h){
   if(!S || !S.ship) return;
   const g=gctx, [sx,sy]=S.ship;
-  g.lineWidth=1; g.strokeStyle="rgba(255,255,255,.28)";
-  (S.looms||[]).forEach(L=>{ g.strokeRect(L.x-0.5, L.y-0.5, L.w+1, L.h+1); });
+  // 박스는 **접근 중인(dθ/dt > 0) 운석에만** 얇게. 그게 뇌에 자극으로 들어가는 것들이다.
+  // (예전엔 전부 흰 사각형으로 그려서, 깜빡임 때문에 스프라이트가 안 보일 때
+  //  박스가 운석처럼 보였다)
+  g.lineWidth=1;
+  (S.looms||[]).forEach(L=>{
+    if(!(L.dth > 0)) return;
+    g.strokeStyle = `rgba(79,209,197,${Math.min(0.55, 0.15 + L.th/40)})`;
+    g.strokeRect(L.x-1.5, L.y-1.5, L.w+3, L.h+3);
+  });
   if(!S.ch || S.ch.norm < 1e-6) return;
   // world = head - psi_escape (decode.py 와 같은 규약). 화면은 y 가 아래로 증가한다.
   const psiE = Math.atan2(S.ch.unit[0], S.ch.unit[1])*180/Math.PI + 180;
