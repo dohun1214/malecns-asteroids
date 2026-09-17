@@ -91,7 +91,7 @@ for f in range(MAXF):
     for o in env.objects:
         if o and type(o).__name__ == "Player" and o.wh[0] > 0:
             ori = int(getattr(o, "orientation", 0)); break
-    a, ch = pol(looms, ori, A)
+    a, ch = pol(looms, ori, A, vel=V.ship_v)
     spk.append(int(pol._tal.sum())); nloom.append(len(looms))
     chan.append([float(ch["lateral"]), float(ch["fore"]), float(ch["norm"])])
     acts[A[a] if A[a] in acts else "기타"] += 1

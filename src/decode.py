@@ -82,8 +82,22 @@ class Decoder:
                     l=r["l"], r=r["r"],
                     **{k: r[k] for k in ("p02_L","p02_R","p11_L","p11_R","p04","a02","a11")})
 
-    def action(self, ch, orientation, actions):
-        """-> (action_index, 목표 orientation 또는 None, 상태 문자열)"""
+    def action(self, ch, orientation, actions, vel=None):
+        """-> (action_index, 목표 orientation 또는 None, 상태 문자열)
+
+        vel: 배의 현재 속도 (세계 수학좌표, 종횡비 보정). None 이면 예전 동작
+             (속도를 무시하고 회피 방향으로 몸을 돌려 추진).
+
+        🔴 [실측] 이 게임은 **관성**이 있다 (probe_inertia.py, 이슈 #36).
+           추진을 끊어도 3초 뒤까지 속도의 67% 가 남고, 회전만 해도 유지된다.
+           속도를 무시하면 '가려는 방향'과 '실제 가는 방향'이 중앙값 90도 어긋난다.
+
+        관성을 넣는 방법 — **새 상수를 만들지 않는 쪽으로 고른다.**
+           목표 속도를 "회피 방향 x 지금 속력" 으로 둔다:  v* = ŵ·|v|
+           추진해야 할 방향은  v* − v  이다. 크기는 |v| 로 공통이라 **방향만 남고
+           부과 상수가 0개다.** (v* = ŵ·k 로 두면 k 가 부과값이 된다.)
+           |v| ≈ 0 이면 v* − v = 0 이라 방향이 정의되지 않으므로 ŵ 를 그대로 쓴다.
+        """
         NOOP = actions.index("NOOP")
         if ch["intensity"] < self.min_intensity or ch["norm"] < 1e-9:
             return NOOP, None, "자극 없음"
@@ -92,6 +106,14 @@ class Decoder:
         psi_escape = psi_threat + 180.0                      # ← 반대로 간다
         head = (ORIENT0_DEG + DEG_PER_ORIENT*orientation) % 360.0
         world = (head - psi_escape) % 360.0                  # 몸 오른쪽 = 세계각 감소
+        if vel is not None:
+            vx, vy = float(vel[0]), float(vel[1])
+            spd = float(np.hypot(vx, vy))
+            if spd > 1e-6:
+                wx, wy = np.cos(np.radians(world)), np.sin(np.radians(world))
+                tx, ty = wx*spd - vx, wy*spd - vy      # 부과 상수 없음 (|v| 로 스케일)
+                if np.hypot(tx, ty) > 1e-6:
+                    world = np.degrees(np.arctan2(ty, tx)) % 360.0
         # [버그 이력] 예전엔 목표를 16방위로 먼저 반올림하고 정수 차이를 썼다.
         #   diff = (tgt - ori + 8) % 16 - 8  은 범위가 **-8..+7** 이라 칸이 하나 비대칭이다.
         #   diff = -8 은 '정반대 방향'이라 좌우 어디로 돌든 같은데 **항상 RIGHT** 로 갔다.

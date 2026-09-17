@@ -69,7 +69,7 @@ for ep in range(N_EP):
         if g is not None and len(idx):
             tape.append((np.asarray(idx), np.asarray(rates), float(g), first))
             first = False
-        a, ch = bp(looms, ori, A)
+        a, ch = bp(looms, ori, A, vel=V.ship_v)
         action = (a, with_fire(a, A))
 say(f"테이프 {len(tape):,} 결정 ({N_EP} 에피소드). 모든 조건에 이걸 똑같이 먹인다.")
 

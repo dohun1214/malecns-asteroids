@@ -78,9 +78,12 @@ def make_tape():
             g = geo_escape(looms)
             idx, rates = bp.map.rates(looms, N, bp.gain, bp.cap)
             if g is not None and len(idx):
-                tape.append((np.asarray(idx), np.asarray(rates), float(g), ori, first))
+                # 컨트롤러가 속도항을 쓰므로(이슈 #36) 속도도 테이프에 뜬다.
+                # 안 뜨면 조건마다 다른 속도를 보게 되어 '같은 입력'이 깨진다.
+                tape.append((np.asarray(idx), np.asarray(rates), float(g), ori,
+                             first, tuple(V.ship_v)))
                 first = False
-            a, ch = bp(looms, ori, A)
+            a, ch = bp(looms, ori, A, vel=V.ship_v)
             action = (a, with_fire(a, A))
     return tape
 
@@ -93,7 +96,7 @@ def replay(tape, lesion=None):
     errs = np.full(len(tape), np.nan); acts = np.empty(len(tape), dtype=np.int16)
     fore = np.empty(len(tape)); lat = np.empty(len(tape))
     bp.b.reset(); bp.dec.reset(); bp.frame = 0
-    for i, (idx, rates, g, ori, first) in enumerate(tape):
+    for i, (idx, rates, g, ori, first, vel) in enumerate(tape):
         if first:
             bp.b.reset(); bp.dec.reset(); bp.frame = 0
         bp.b.set_poisson_rates(idx, rates)
@@ -103,7 +106,7 @@ def replay(tape, lesion=None):
         bp._gac = (bp.b.gacc/STEPS_PER_DECISION).cpu().numpy()
         ch = bp.dec.channels(bp.rate_of)
         fore[i] = ch["fore"]; lat[i] = ch["lateral"]
-        a, tgt, st = bp.dec.action(ch, ori, A)
+        a, tgt, st = bp.dec.action(ch, ori, A, vel=vel if bp.inertia else None)
         acts[i] = a
         if ch["norm"] >= 1e-9:
             lt, fo = ch["unit"]

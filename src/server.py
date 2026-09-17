@@ -208,7 +208,7 @@ class Sim(threading.Thread):
                 # 그동안 뇌를 안 돌리면 3D 뇌 화면이 통째로 얼어붙어서 고장난 것처럼 보인다.
                 # -> 자극만 비우고 뇌는 **항상** 돌린다. 액션만 무시한다.
                 tb = time.perf_counter()
-                a, ch = bp(looms, ori, A)
+                a, ch = bp(looms, ori, A, vel=V.ship_v)
                 ms_brain = (time.perf_counter()-tb)*1000.0
                 action = ((A.index("NOOP"), A.index("FIRE")) if xy is None
                           else (a, with_fire(a, A)))

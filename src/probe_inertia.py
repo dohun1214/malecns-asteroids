@@ -96,7 +96,7 @@ for ep in range(3):
         for o in env.objects:
             if o and type(o).__name__ == "Player" and o.wh[0] > 0:
                 ori = int(getattr(o, "orientation", 0)); break
-        a, ch = pol(looms, ori, A)
+        a, ch = pol(looms, ori, A, vel=V.ship_v)
         if ch["norm"] > 1e-9 and prev is not None:
             # 뇌가 가리키는 회피 방향 (세계 좌표)
             psi_esc = np.degrees(np.arctan2(ch["lateral"], ch["fore"])) + 180.0
