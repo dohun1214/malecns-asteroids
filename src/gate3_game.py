@@ -50,14 +50,14 @@ def episode(rng):
     obs = env.reset(seed=int(rng.integers(0, 2**31)))
     for _ in range(int(rng.integers(1, 31))): env.step(A.index("NOOP"))
     V.reset(); bp.dec.reset(); bp.b.reset(); bp.frame = 0
-    action = A.index("FIRE"); errs = []; acts = []
+    action = (A.index("NOOP"), A.index("FIRE")); errs = []; acts = []
     for f in range(MAXF):
-        obs, rew, tr, te, info = env.step(action)
+        obs, rew, tr, te, info = env.step(frame_action(action[0], action[1], f))
         if tr or te: break
         if f % ACT_EVERY: continue
         xy, head, looms = V.looming(env.objects)
         if xy is None:
-            action = A.index("FIRE"); continue
+            action = (A.index("NOOP"), A.index("FIRE")); continue
         ori = 0
         for o in env.objects:
             if o and type(o).__name__ == "Player":
@@ -69,7 +69,7 @@ def episode(rng):
             lat, fore = ch["unit"]
             brain = (np.degrees(np.arctan2(lat, fore)) + 180.0) % 360.0   # 판독 = 위협 -> +180
             errs.append(abs((brain - g + 180.0) % 360.0 - 180.0))
-        action = with_fire(a, A)
+        action = (a, with_fire(a, A))
     return np.array(errs), acts
 
 

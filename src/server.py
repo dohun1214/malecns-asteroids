@@ -19,7 +19,8 @@ from pathlib import Path
 import numpy as np, torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from play import BrainPolicy, make_env, Vision, ACT_EVERY, with_fire, STEPS_PER_DECISION
+from play import (BrainPolicy, make_env, Vision, ACT_EVERY, with_fire,
+                  frame_action, STEPS_PER_DECISION)
 from vision import ship_heading_deg
 import rewire as RW
 
@@ -161,7 +162,7 @@ class Sim(threading.Thread):
         self._new = True
         self._objs = None; self._objs_age = 0
         self._scr2 = [None, None]
-        action = A.index("FIRE")
+        action = (A.index("NOOP"), A.index("FIRE"))
         step = 0; frame = 0; score = 0.0
         t_next = time.perf_counter()
         ms_brain = ms_frame = 0.0
@@ -174,9 +175,9 @@ class Sim(threading.Thread):
                 V.reset(); bp.dec.reset(); bp.b.reset(); bp.frame = 0
                 self._objs = None; self._objs_age = 0
                 self._scr2 = [None, None]
-                score = 0.0; action = A.index("FIRE")
+                score = 0.0; action = (A.index("NOOP"), A.index("FIRE"))
             t0 = time.perf_counter()
-            obs, rew, tr, te, info = env.step(action)
+            obs, rew, tr, te, info = env.step(frame_action(action[0], action[1], frame))
             score += float(rew); frame += 1
             self._scr2 = [self._scr2[1], self.grab()]      # 깜빡임 합성용 2프레임 링
             # [실측/09문서] Player 객체가 **프레임의 절반에서 없다.** 4프레임마다 결정하는
@@ -206,7 +207,8 @@ class Sim(threading.Thread):
                 tb = time.perf_counter()
                 a, ch = bp(looms, ori, A)
                 ms_brain = (time.perf_counter()-tb)*1000.0
-                action = A.index("FIRE") if xy is None else with_fire(a, A)
+                action = ((A.index("NOOP"), A.index("FIRE")) if xy is None
+                          else (a, with_fire(a, A)))
                 step += 1
                 self.emit(step, self.screen(), ch, looms if xy else [], xy, ori,
                           score, info, ms_brain, ms_frame, fps, action)
@@ -241,7 +243,7 @@ class Sim(threading.Thread):
                   rates=rates, dead_v=self._dead_v, lives=info.get("lives") if isinstance(info, dict) else None,
                   fps=round(fps, 1), ms_brain=round(ms_brain, 2), ms_frame=round(ms_frame, 2),
                   spikes=int(len(pts)), n_fired=int(fired.size),
-                  action=self.A[action], ori=ori, heading=round(ship_heading_deg(ori), 1),
+                  action=self.A[action[0] if isinstance(action, tuple) else action], ori=ori, heading=round(ship_heading_deg(ori), 1),
                   lesion=sorted(self.lesion),
                   ship=[round(float(xy[0]), 1), round(float(xy[1]), 1)] if xy else None,
                   looms=[dict(x=round(float(L["x"]), 1), y=round(float(L["y"]), 1),

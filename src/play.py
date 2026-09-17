@@ -32,6 +32,23 @@ def with_fire(a, actions):
     return actions.index(FIRE_MAP.get(n, n))
 
 
+# 🔴 [실측] 발사 버튼은 **계속 누르고 있으면 한 발도 안 나간다.**
+#   frameskip=1 에서 1프레임만 누르면 ROM 이 못 읽고, 계속 누르면 뗄 때까지 재발사가 안 된다.
+#   probe_fire4.py: 2400프레임 동안
+#     계속 누름 / 1프레임 누름   -> 점수 20, 운석 개수 최대 5 (= 아무것도 못 부숨)
+#     2프레임 누르고 6 뗌        -> 점수 130, 운석 개수 최대 8 (쪼개진다)
+#     4프레임 누르고 4 뗌        -> 점수 130
+#   우리는 결정당 4프레임 내내 같은 액션을 유지했으므로 **FIRE 를 계속 누르고 있었고,
+#   따라서 지금까지 한 발도 안 쏘고 있었다.**
+#   -> 결정 안에서 앞 2프레임만 FIRE, 뒤 2프레임은 떼서 회전/추진만 유지한다.
+FIRE_PRESS = 2                      # ACT_EVERY 중 앞 몇 프레임을 누를지
+
+
+def frame_action(base, fire, k, act_every=ACT_EVERY):
+    """결정 안의 k번째 프레임에 실제로 넣을 액션. 회전·추진은 4프레임 내내 유지된다."""
+    return fire if k % act_every < FIRE_PRESS else base
+
+
 class BrainPolicy:
     def __init__(self, lesion=None, th50=7.2, cap=150.0, k=16, min_intensity=0.0,
                  align_slop=1, hold=0):
@@ -142,7 +159,7 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     V.reset()
     if hasattr(policy, "dec"): policy.dec.reset()
     if hasattr(policy, "b"): policy.b.reset(); policy.frame = 0
-    action = actions.index("NOOP")
+    action = (actions.index("NOOP"), actions.index("FIRE"))
     score = 0.0; frames = 0; alive_runs = []; cur = 0; had_ship = False
     n_up = 0; n_dec = 0
     # --- 사건 기반 지표 (이슈 #6): 접근 중인 운석이 위험 반경 안에 든 '사건' 단위로 센다
@@ -152,14 +169,16 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     ev_hit = {R: 0 for R in radii}
     lives_prev = None
     for f in range(max_frames):
-        obs, rew, trunc, term, info = env.step(action)     # OCAtari 순서
+        obs, rew, trunc, term, info = env.step(
+            frame_action(action[0], action[1], f))         # OCAtari 순서
         score += float(rew); frames += 1
         if term or trunc: break
         if f % ACT_EVERY: continue
         xy, head, looms = V.looming(env.objects)
         if xy is None:
             if had_ship and cur > 0: alive_runs.append(cur); cur = 0
-            action = actions.index("FIRE" if fire else "NOOP"); continue
+            a0 = actions.index("NOOP")
+            action = (a0, actions.index("FIRE") if fire else a0); continue
         had_ship = True; cur += ACT_EVERY
         ori = 0
         for o in env.objects:
@@ -186,7 +205,8 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
         action, ch = policy(looms, ori, actions)
         n_dec += 1
         if actions[action] == "UP": n_up += 1
-        if fire: action = with_fire(action, actions)
+        base_a = action
+        action = (base_a, with_fire(base_a, actions)) if fire else (base_a, base_a)
         if log is not None:
             log.append(dict(f=f, n_loom=len(looms), action=int(action),
                             **{k: float(v) for k, v in ch.items()
