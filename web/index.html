@@ -61,6 +61,29 @@
   #restore{border-color:var(--accent);color:var(--accent)}
   .legend{display:flex;gap:10px;color:var(--dim);font-size:10px;align-items:center}
   .dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px}
+  /* 분기 영상 겹침창 */
+  #clips{position:fixed;inset:0;z-index:20;display:none;
+         background:#0a0c0dd9;backdrop-filter:blur(3px);padding:24px}
+  #clips.on{display:grid;place-items:center}
+  #clipbox{width:min(1180px,96vw);max-height:92vh;display:flex;flex-direction:column;
+           background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  #cliphd{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  #cliphd h2{font-size:13px;font-weight:600}
+  #cliphd .sub{color:var(--dim);font-size:11px}
+  #clipclose{margin-left:auto;background:#1b2125;color:var(--fg);border:1px solid var(--line);
+             border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+  #cliptabs{display:flex;gap:8px;padding:10px 14px 0}
+  #cliptabs button{background:#1b2125;color:var(--dim);border:1px solid var(--line);
+                   border-radius:6px;padding:7px 12px;font:inherit;cursor:pointer}
+  #cliptabs button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);
+                   box-shadow:inset 0 0 0 1px var(--accent)}
+  /* 영상이 세로로 길어서 (998x752) 그냥 두면 컨트롤·설명이 화면 밖으로 밀린다 */
+  #clipvid{width:100%;max-height:60vh;object-fit:contain;background:#0b0e0f;
+           display:block;margin-top:10px;min-height:0}
+  #clipcap{padding:12px 14px 14px;color:var(--dim);font-size:12px;line-height:1.65}
+  #clipcap b{color:var(--fg);font-weight:600}
+  #clipcap .k{color:var(--accent)}
+  #clipcap .x{color:var(--alarm)}
   #conn{position:fixed;inset:0;display:grid;place-items:center;background:#0e1113ee;
         font-size:14px;color:var(--dim);z-index:9}
 </style>
@@ -125,10 +148,27 @@
     <button data-g="rewire"  aria-pressed="false">LC4 배선 섞기</button>
     <div class="right">
       <span id="chip">정상 회로</span>
+      <button id="clipbtn">분기 영상</button>
       <button id="flybtn" aria-pressed="true">초파리로 보기</button>
       <button id="restore">정상 회로로 복구</button>
       <button id="newgame">새 게임</button>
     </div>
+  </div>
+</div>
+<div id="clips" aria-hidden="true">
+  <div id="clipbox">
+    <div id="cliphd">
+      <h2>분기 녹화</h2>
+      <span class="sub">같은 순간에서 멈춰 세우고, 회로만 바꿔 다시 달린 주행</span>
+      <button id="clipclose">닫기 (Esc)</button>
+    </div>
+    <div id="cliptabs">
+      <button data-c="neg"   aria-pressed="true">음성 대조</button>
+      <button data-c="dnp11" aria-pressed="false">DNp11</button>
+      <button data-c="quad"  aria-pressed="false">4분할</button>
+    </div>
+    <video id="clipvid" controls loop muted playsinline preload="metadata"></video>
+    <div id="clipcap"></div>
   </div>
 </div>
 <div id="conn">서버 연결 중… <span class="num">ws://localhost:8765</span></div>
@@ -500,6 +540,54 @@ $("#flybtn").onclick = ()=>{ flyOn = !flyOn;
   $("#flybtn").setAttribute("aria-pressed", flyOn ? "true" : "false"); };
 $("#restore").onclick = ()=> ws.send(JSON.stringify({cmd:"restore"}));
 $("#newgame").onclick = ()=> ws.send(JSON.stringify({cmd:"newgame"}));
+
+
+/* ── 분기 영상 ─────────────────────────────────────────────────────────
+   같은 분기점(ALE 시스템상태 + OCAtari 내부버퍼 + RNG + 뇌 16텐서)에서
+   회로만 바꿔 다시 달린 주행을 나란히 붙인 영상이다.
+   겹침창을 닫으면 src 를 떼서 뒤에서 계속 디코딩되지 않게 한다. */
+const CLIPS = {
+  neg: { file:"clips/neg.mp4", cap:
+    `<b>음성 대조 — 아무 2개를 끄면 아무 일도 없다</b><br>
+     왼쪽은 온전한 뇌, 오른쪽은 166,700개 중 <b>무작위로 고른 2세포</b>를 끈 뇌.
+     같은 분기점에서 출발해 <span class="k">끝까지 픽셀 단위로 동일</span>하다.
+     추진 비율도 26.7%로 같다. "뉴런을 끄면 당연히 달라진다"를 먼저 지운다.` },
+  dnp11: { file:"clips/dnp11.mp4", cap:
+    `<b>지목한 2세포 — DNp11</b><br>
+     온전 / 무작위 2세포 / DNp11 2세포. 무작위 쪽은 온전과 겹쳐 있고,
+     DNp11 만 <span class="x">17프레임째부터 갈라진다</span>.
+     추진 비율 26.7% → <span class="x">0.0%</span> — 이 주행 내내 한 번도 전진하지 않는다.
+     세로선은 분기점이고, 그 뒤로는 <b>입력이 같고 회로만 다르다</b>.` },
+  quad: { file:"clips/quad.mp4", cap:
+    `<b>네 가지 회로</b><br>
+     온전(26.7%) / DNp11 끔(<span class="x">0.0%</span>, 17프레임) /
+     DNp02 끔(55.6%, 5프레임) / LC4 배선 섞기(16.3%, 5프레임).
+     맨 오른쪽은 <b>세포를 하나도 끄지 않았다</b> — LC4 의 출력 배선만 섞었고,
+     차수와 부호는 그대로다. 그래도 갈라진다.` },
+};
+const clipEl = { box:$("#clips"), vid:$("#clipvid"), cap:$("#clipcap") };
+let clipKey = null;
+function clipShow(k){
+  if(!CLIPS[k]) return;
+  clipKey = k;
+  clipEl.vid.src = CLIPS[k].file;
+  clipEl.vid.currentTime = 0;
+  clipEl.vid.play().catch(()=>{});
+  clipEl.cap.innerHTML = CLIPS[k].cap;
+  document.querySelectorAll("#cliptabs button").forEach(b=>
+    b.setAttribute("aria-pressed", b.dataset.c===k ? "true":"false"));
+}
+function clipOpen(on){
+  clipEl.box.classList.toggle("on", on);
+  clipEl.box.setAttribute("aria-hidden", on ? "false":"true");
+  if(on) clipShow(clipKey || "neg");
+  else { clipEl.vid.pause(); clipEl.vid.removeAttribute("src"); clipEl.vid.load(); }
+}
+$("#clipbtn").onclick = ()=> clipOpen(true);
+$("#clipclose").onclick = ()=> clipOpen(false);
+clipEl.box.onclick = e=>{ if(e.target === clipEl.box) clipOpen(false); };
+document.querySelectorAll("#cliptabs button").forEach(b=> b.onclick = ()=> clipShow(b.dataset.c));
+addEventListener("keydown", e=>{ if(e.key === "Escape" && clipEl.box.classList.contains("on")) clipOpen(false); });
 
 try { resize(); connect(); tick(); }
 catch(e){ fail("시작 실패: " + e); }
