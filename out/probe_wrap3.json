@@ -1,0 +1,23 @@
+{
+ "Player": {
+  "n": 13732,
+  "xmin": 3.0,
+  "xmax": 166.0,
+  "ymin": 18.0,
+  "ymax": 528.0
+ },
+ "Asteroid": {
+  "n": 65881,
+  "xmin": 4.0,
+  "xmax": 159.0,
+  "ymin": 24.0,
+  "ymax": 192.0
+ },
+ "PlayerMissile": {
+  "n": 25282,
+  "xmin": 5.0,
+  "xmax": 166.0,
+  "ymin": 17.0,
+  "ymax": 193.0
+ }
+}
