@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np, torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from play import BrainPolicy, make_env, Vision, ACT_EVERY, with_fire
+from play import BrainPolicy, make_env, Vision, ACT_EVERY, with_fire, frame_action
 import rewire as RW
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -94,10 +94,10 @@ def decide_and_step(sink, n_dec, track=None):
     화면만 보면 분기가 잘 안 보인다 — 운석은 탄도라 총에 맞기 전까진 같은 길을 간다.
     실제로 갈라지는 건 **배의 궤적**이다."""
     acts = []
-    action = A.index("FIRE")
+    action = (A.index("NOOP"), A.index("FIRE"))
     for d in range(n_dec):
         for k in range(ACT_EVERY):
-            env.step(action)
+            env.step(frame_action(action[0], action[1], k))
             sink.write(screen().tobytes())
             if track is not None:
                 p = ship_xy()
@@ -110,7 +110,8 @@ def decide_and_step(sink, n_dec, track=None):
                 ori = int(getattr(o, "orientation", 0)); break
         a, ch = bp(looms, ori, A)          # 배가 없어도 뇌는 항상 돌린다 (06문서 §7)
         acts.append(A[a])
-        action = A.index("FIRE") if xy is None else with_fire(a, A)
+        action = ((A.index("NOOP"), A.index("FIRE")) if xy is None
+                  else (a, with_fire(a, A)))
     return acts
 
 

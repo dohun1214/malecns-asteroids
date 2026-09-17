@@ -13,7 +13,8 @@ import sys, json, time
 from pathlib import Path
 import numpy as np, torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from play import BrainPolicy, make_env, Vision, ACT_EVERY, with_fire, STEPS_PER_DECISION
+from play import (BrainPolicy, make_env, Vision, ACT_EVERY, with_fire,
+                  frame_action, STEPS_PER_DECISION)
 import rewire as RW
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,14 +52,14 @@ for ep in range(N_EP):
     env.reset(seed=int(rng.integers(0, 2**31)))
     for _ in range(int(rng.integers(1, 31))): env.step(A.index("NOOP"))
     V.reset(); bp.dec.reset(); bp.b.reset(); bp.frame = 0
-    action = A.index("FIRE"); first = True
+    action = (A.index("NOOP"), A.index("FIRE")); first = True
     for f in range(MAXF):
-        obs, rew, tr, te, info = env.step(action)
+        obs, rew, tr, te, info = env.step(frame_action(action[0], action[1], f))
         if tr or te: break
         if f % ACT_EVERY: continue
         xy, head, looms = V.looming(env.objects)
         if xy is None:
-            action = A.index("FIRE"); continue
+            action = (A.index("NOOP"), A.index("FIRE")); continue
         ori = 0
         for o in env.objects:
             if o and type(o).__name__ == "Player":
@@ -69,7 +70,7 @@ for ep in range(N_EP):
             tape.append((np.asarray(idx), np.asarray(rates), float(g), first))
             first = False
         a, ch = bp(looms, ori, A)
-        action = with_fire(a, A)
+        action = (a, with_fire(a, A))
 say(f"테이프 {len(tape):,} 결정 ({N_EP} 에피소드). 모든 조건에 이걸 똑같이 먹인다.")
 
 
