@@ -14,7 +14,7 @@ import numpy as np, torch
 from ocatari.core import OCAtari
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lif_rt import BrainRT, PARAMS
-from vision import Vision, LC4Map, ship_heading_deg, ASPECT
+from vision import Vision, LC4Map, LC10aMap, ship_heading_deg, ASPECT
 from decode import Decoder
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -308,3 +308,64 @@ if __name__ == "__main__":
           f"최장 {agg['max_life']:.1f}f  ({el:.0f}s)")
     (ROOT/"out"/f"play_{which.replace(':','_')}.json").write_text(
         json.dumps(dict(agg=agg, eps=res), indent=2), encoding="utf-8")
+
+
+# ===========================================================================
+# 쫓기 모드 — 추적 회로 (게이트 4, 20문서)
+# ===========================================================================
+# 도망 모드(BrainPolicy)와 **섞지 않는다.** 도피 하행뉴런과 추적 하행뉴런은 하류에서
+# 거의 안 겹치므로(시냅스 >=100 기준 공유 0세포) 뇌가 대신 섞어주는 공통 판독이 없다.
+# 섞으려면 우리가 가중치를 정해야 하고 그건 부과값이다. 그래서 **모드로 가른다.**
+#
+# 두 모드 모두 뇌 166,700개를 전부 돌린다. 모드는 '어느 판독을 핸들에 거느냐'일 뿐
+# 뉴런을 끄는 게 아니다.
+class PursuitPolicy:
+    """LC10a -> AOTU019/025 -> DNa -> 하류 판독. 표적 쪽으로 돈다.
+
+    조향 부호는 우리가 안 정했다 (08문서 §8.1 / 게이트 4(a)):
+      오른쪽 표적 -> 오른쪽 AOTU025(흥분·동측)가 오른쪽 DN 을 올리고
+                     오른쪽 AOTU019(억제·대측)가 왼쪽 DN 을 내린다 -> (좌-우) < 0
+      문헌의 "turn toward the side of higher DN activity" -> 오른쪽으로 돈다 = 표적 쪽
+
+    임계값이 없다. **부호(영교차)만 본다.** 자극이 없으면 NOOP.
+    ⚠️ 추진은 하지 않는다 — 조향만 한다. 추진을 넣으려면 새 판독 채널과 새 정렬 기준이
+       필요한데 둘 다 새 선택이 된다. 지금은 안 넣고, 안 넣었다고 적는다.
+    """
+
+    def __init__(self, lesion=None, th50=7.2, cap=150.0, k=16):
+        import pandas as pd
+        self.C = dict(np.load(G/"circuit_idx.npz"))
+        nodes = pd.read_feather(ROOT.parent/"malecns-song"/"graph"/"nodes.feather")
+        typ = nodes["type"].astype("string").fillna("").to_numpy()
+        self.LC10A = np.where(typ == "LC10a")[0]
+        P = np.load(G/"lc10a_position.npz", allow_pickle=True)
+        self.map = LC10aMap(P["idx"], P["pos"], P["side"], P["valid"],
+                            float(P["theta_L"]), k=k)
+        RD = dict(np.load(G/"pursuit_readout.npz", allow_pickle=True))
+        self.rl, self.rr = RD["left"], RD["right"]
+        self.gain, self.cap = th50, cap
+        self.b = BrainRT(params=PARAMS)
+        self.b.reset(); self.b.set_poisson(self.LC10A, 1.0)
+        self.b.capture(STEPS_PER_DECISION, tally=True)
+        self.b.reset()
+        self.frame = 0
+        self.lesion_name = lesion
+        if lesion:
+            for name in lesion.split("+"):
+                ii = self.LC10A if name == "LC10a" else self.C[name]
+                self.b.lesion(torch.as_tensor(np.asarray(ii), device="cuda"))
+
+    def __call__(self, looms, orientation, actions, vel=None):
+        idx, rates = self.map.rates(looms, self.b.N, self.gain, self.cap)
+        self.b.set_poisson_rates(idx, rates)
+        self.b.tally.zero_(); self.b.gacc.zero_()
+        self.b.seed.fill_(self.frame); self.frame += 1
+        self.b.graph.replay()
+        torch.cuda.synchronize()
+        gac = (self.b.gacc/STEPS_PER_DECISION).cpu().numpy()
+        l = float(gac[self.rl].mean()); r = float(gac[self.rr].mean())
+        ch = dict(left=l, right=r, steer=l - r, norm=abs(l - r))
+        if not looms or abs(l - r) <= 0.0:
+            return actions.index("NOOP"), ch
+        # (좌-우) < 0  -> 오른쪽 DN 이 더 활발 -> 오른쪽으로 돈다
+        return actions.index("RIGHT" if (l - r) < 0 else "LEFT"), ch
