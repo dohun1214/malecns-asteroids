@@ -14,7 +14,7 @@
 ⚠️ 토글은 결정 경계에서만 적용한다. CUDA Graph 는 포인터를 굽기 때문에
    alive 텐서 내용만 바꾸면 되지만, 한 결정 중간에 바뀌면 그 결정이 반쪽이 된다.
 """
-import sys, json, time, struct, threading, asyncio, collections
+import sys, json, time, struct, threading, asyncio, collections, socket
 from pathlib import Path
 import numpy as np, torch
 
@@ -323,12 +323,23 @@ async def main():
         def end_headers(self):      # 개발 중 캐시 때문에 고친 화면이 안 뜨는 걸 막는다
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
-    httpd = ThreadingHTTPServer(("0.0.0.0", PORT+1),
-                                functools.partial(Quiet, directory=str(WEB)))
+
+    # 🔴 [실측] IPv4 로만 열면 "localhost" 접속이 **2,050 ms** 걸린다.
+    #   Windows 는 localhost 를 ::1 로 먼저 풀고, 그 시도가 약 2초 뒤에야 포기한다.
+    #   (ws://localhost 2077/2053/2050 ms vs ws://127.0.0.1 1/1/1 ms)
+    #   브라우저도 ws://localhost 로 붙으므로 **첫 화면이 2초 늦게 뜬다.**
+    #   -> IPv6 듀얼스택으로 연다. Windows 는 V6ONLY 가 기본 1이라 꺼줘야 한다.
+    class Dual(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
+        def server_bind(self):
+            try: self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            except OSError: pass
+            super().server_bind()
+    httpd = Dual(("::", PORT+1), functools.partial(Quiet, directory=str(WEB)))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     print(f"화면:  http://localhost:{PORT+1}/index.html", flush=True)
     print(f"소켓:  ws://localhost:{PORT}", flush=True)
-    async with serve(handler, "0.0.0.0", PORT, compression=None, max_size=None):
+    async with serve(handler, None, PORT, compression=None, max_size=None):
         await pump()
 
 
