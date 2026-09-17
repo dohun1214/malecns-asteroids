@@ -1,0 +1,27 @@
+{
+  "frames": 3000,
+  "decisions": 462,
+  "score": 880.0,
+  "drops": 10,
+  "rises": 0,
+  "ship_visible": 0.7415730337078652,
+  "v_nonzero": 1873,
+  "v_total": 2229,
+  "lit_min": 192,
+  "lit2_min": 432,
+  "spk_min": 0,
+  "acts": {
+    "UP": 167,
+    "LEFT": 175,
+    "RIGHT": 119,
+    "NOOP": 1,
+    "기타": 0
+  },
+  "turn_bias": 0.19047619047619047,
+  "objects": {
+    "Player": 1844,
+    "Asteroid": 12194,
+    "PlayerMissile": 3444
+  },
+  "fail": []
+}
