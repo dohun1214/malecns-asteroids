@@ -161,7 +161,7 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     if hasattr(policy, "b"): policy.b.reset(); policy.frame = 0
     action = (actions.index("NOOP"), actions.index("FIRE"))
     score = 0.0; frames = 0; alive_runs = []; cur = 0; had_ship = False
-    n_up = 0; n_dec = 0
+    n_up = 0; n_dec = 0; n_left = 0; n_right = 0
     # --- 사건 기반 지표 (이슈 #6): 접근 중인 운석이 위험 반경 안에 든 '사건' 단위로 센다
     radii = [float(threat_r)] if np.isscalar(threat_r) else [float(x) for x in threat_r]
     ev_open = {R: {} for R in radii}      # 반경 -> {운석 id: 사건 시작 프레임}
@@ -205,6 +205,8 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
         action, ch = policy(looms, ori, actions)
         n_dec += 1
         if actions[action] == "UP": n_up += 1
+        elif actions[action] == "LEFT": n_left += 1
+        elif actions[action] == "RIGHT": n_right += 1
         base_a = action
         action = (base_a, with_fire(base_a, actions)) if fire else (base_a, base_a)
         if log is not None:
@@ -214,6 +216,8 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     if cur > 0: alive_runs.append(cur)
     R0 = radii[0]
     return dict(score=score, frames=frames, up_frac=(n_up/max(n_dec,1)),
+                n_dec=n_dec, n_left=n_left, n_right=n_right,
+                turn_bias=((n_left-n_right)/max(n_left+n_right, 1)),
                 events=ev_total[R0], hits=ev_hit[R0],
                 events_by_r={R: ev_total[R] for R in radii},
                 hits_by_r={R: ev_hit[R] for R in radii},
