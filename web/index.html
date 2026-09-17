@@ -110,7 +110,8 @@
       <div class="pb"><canvas id="loom"></canvas></div></div>
     <div class="panel"><div class="ph">스파이크 래스터</div>
       <div class="pb"><canvas id="raster"></canvas></div></div>
-    <div class="panel"><div class="ph">집단 벡터 <span class="r num" id="r_norm">—</span></div>
+    <div class="panel"><div class="ph">집단 벡터 (하행뉴런 투표)
+      <span class="r num" id="r_norm">—</span></div>
       <div class="pb"><canvas id="vec"></canvas></div></div>
     <div class="panel"><div class="ph">디코더 <span class="r num" id="r_dec">—</span></div>
       <div class="pb"><canvas id="dec"></canvas></div></div>
@@ -323,6 +324,7 @@ function overlay(){
 /* ---------------- 작은 패널 ---------------- */
 const hist = {loom:[], raster:[], fore:[], lat:[]};
 const bandMax = [1, 1, 1, 1];
+let voteMax = 0.2, p04Max = 0.5;
 let deadN = 0;
 let S = null;
 function px(c){ return c.getContext("2d"); }
@@ -360,23 +362,56 @@ function drawPanels(){
     g.fillText(`${bandMax[i].toFixed(0)}Hz`, 4*dpr, (i+0.45)*bh+18*dpr);
   });
 
-  // ③ 집단 벡터
+  // ③ 집단 벡터 — **네 집단이 각자 투표하고, 합이 위협 방향이 된다** (Dombrovski 2023)
+  //    이 패널이 이 데모의 메커니즘을 보여주는 유일한 자리다. 합벡터만 그리면
+  //    "어디선가 화살표가 나온다"로 보이고, 네 표를 같이 그려야 '투표'가 보인다.
   c=$("#vec"); g=clear(c);
-  const cx=c.width/2, cy=c.height/2, R=Math.min(cx,cy)-14*dpr;
+  const cx=c.width/2, cy=c.height/2, R=Math.min(cx,cy)-18*dpr;
   g.strokeStyle="#232a2e"; g.lineWidth=1*dpr;
   g.beginPath(); g.arc(cx,cy,R,0,7); g.stroke();
+  g.beginPath(); g.arc(cx,cy,R*0.5,0,7); g.stroke();
   g.beginPath(); g.moveTo(cx-R,cy); g.lineTo(cx+R,cy);
   g.moveTo(cx,cy-R); g.lineTo(cx,cy+R); g.stroke();
   if(S.ch){
-    const u=S.ch.unit, n=S.ch.norm;
-    g.strokeStyle = n<0.16 ? "#ff6b5e" : "#4fd1c5"; g.lineWidth=2.5*dpr;
-    g.beginPath(); g.moveTo(cx,cy);
-    g.lineTo(cx+u[0]*R*Math.min(1,n*3), cy-u[1]*R*Math.min(1,n*3)); g.stroke();
-    if(n<0.16){ g.fillStyle="#ff6b5e"; g.font=`${11*dpr}px ui-monospace`;
-      g.fillText("상쇄", cx-14*dpr, cy+R+10*dpr); }
+    const ch=S.ch;
+    // 네 표: 각 집단이 '어느 방향의 위협'에 투표하는가
+    //  앞  = DNp02 하류 160세포     뒤 = DNp11 하류 347세포
+    //  오른쪽 = **좌측** 하류 집단   왼쪽 = **우측** 하류 집단  (교차 투사, 10문서 §3)
+    const VOTES=[["앞",  ch.a02, 0,-1,"#ffd166"],
+                 ["뒤",  ch.a11, 0, 1,"#6aa9ff"],
+                 ["오",  ch.l,   1, 0,"#c792ea"],
+                 ["좌",  ch.r,  -1, 0,"#c792ea"]];
+    // 네 집단은 같은 척도(하류 집단 평균 시냅스 구동)라 **하나의 러닝 맥스**로 묶어
+    // 크기를 서로 비교할 수 있게 한다. DNp04 는 자릿수가 달라서 따로 잡는다.
+    voteMax = Math.max(voteMax*0.995, 0.2,
+                       ...VOTES.map(v=>Math.abs(v[1])));
+    p04Max = Math.max(p04Max*0.995, 0.5, Math.abs(ch.p04));
+    g.lineWidth=3*dpr; g.lineCap="round";
+    VOTES.forEach(([lab,val,dx,dy,col])=>{
+      const m = Math.max(0, val)/voteMax, L = R*Math.min(1, m);
+      g.strokeStyle=col; g.globalAlpha=0.9;
+      g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+dx*L, cy+dy*L); g.stroke();
+      g.globalAlpha=1; g.fillStyle=col; g.font=`${10*dpr}px ui-monospace`;
+      g.fillText(lab, cx+dx*(R+9*dpr)-3*dpr, cy+dy*(R+9*dpr)+4*dpr);
+    });
+    // 강도 고리 (DNp04 하류)
+    const ir = R*Math.min(1, Math.max(0,ch.p04)/p04Max);
+    g.strokeStyle="rgba(255,209,102,.35)"; g.lineWidth=1.5*dpr;
+    g.beginPath(); g.arc(cx,cy,Math.max(2,ir),0,7); g.stroke();
+    // 합벡터(위협) 과 그 반대(회피)
+    const n=ch.norm, u=ch.unit, L=R*Math.min(1,n/Math.max(voteMax,1e-6));
+    if(n>1e-9){
+      g.lineWidth=2*dpr; g.strokeStyle="rgba(139,152,159,.8)";
+      g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+u[0]*L, cy-u[1]*L); g.stroke();
+      g.lineWidth=3.5*dpr; g.strokeStyle = n<0.16 ? "#ff6b5e" : "#4fd1c5";
+      g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx-u[0]*L, cy+u[1]*L); g.stroke();
+    }
+    g.fillStyle="#8b989f"; g.font=`${9*dpr}px ui-monospace`;
+    g.fillText(`회색=위협 합   눈금 ${voteMax.toFixed(2)}`, 4*dpr, c.height-14*dpr);
+    g.fillStyle = n<0.16 ? "#ff6b5e" : "#4fd1c5";
+    g.fillText(n<0.16 ? "상쇄 — 방향이 정의 안 됨" : "청록=회피(위협의 반대)",
+               4*dpr, c.height-3*dpr);
   }
-  g.fillStyle="#8b989f"; g.font=`${10*dpr}px ui-monospace`;
-  g.fillText("앞", cx-6*dpr, 12*dpr); g.fillText("오른쪽", c.width-34*dpr, cy-4*dpr);
 
   // ④ 디코더 바
   c=$("#dec"); g=clear(c);
