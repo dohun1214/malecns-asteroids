@@ -45,6 +45,9 @@ def run(policy, seed, frames=FRAMES):
     prev = 0; shots = hits = 0; score = 0.0
     aimed = ndec = 0; nearest = []
     lives_prev = None; alive_runs = []; cur = 0
+    n_deaths = 0        # 🔴 이슈 #56: '배 보이는 구간' 지표는 화면 판정에 흔들린다.
+                        #    정책/병변 비교에는 lives 감소로 센 쪽을 쓴다.
+    n_frames = 0
     for f in range(frames):
         _, rew, tr, te, info = env.step(frame_action(act[0], act[1], f))
         score += float(rew)
@@ -57,7 +60,7 @@ def run(policy, seed, frames=FRAMES):
         lv = info.get("lives", None) if isinstance(info, dict) else None
         if lives_prev is not None and lv is not None and lv < lives_prev:
             if cur > 0: alive_runs.append(cur)
-            cur = 0
+            cur = 0; n_deaths += 1
         lives_prev = lv
         xy, head, looms = V.looming(ENV.objects)
         if xy is None:
@@ -81,14 +84,16 @@ def run(policy, seed, frames=FRAMES):
     return dict(shots=shots, hits=hits, score=score,
                 aimed=aimed/max(ndec, 1),
                 near=float(np.median(nearest)) if nearest else float("nan"),
-                life=float(np.mean(alive_runs)) if alive_runs else 0.0)
+                life=float(np.mean(alive_runs)) if alive_runs else 0.0,
+                n_deaths=n_deaths,
+                life_per_death=float(f + 1)/float(n_deaths + 1))
 
 
 CONDS = [("도망", None), ("도망", "LC10a"), ("도망", "DNp11"),
          ("쫓기", None), ("쫓기", "LC10a"), ("쫓기", "DNp11")]
 R = {}
 say(f"{'모드':<5} {'병변':<7} | {'각폭안':>7} {'발사당명중':>10} {'최근접각':>8} "
-    f"| {'목숨당생존':>10} {'점수':>7}")
+    f"| {'죽음당생존':>10} {'점수':>7}")
 say("-"*78)
 for mode, les in CONDS:
     if mode == "도망":
@@ -109,7 +114,7 @@ for mode, les in CONDS:
     R[f"{mode}/{les or '온전'}"] = {k: g(k) for k in rs[0]}
     say(f"{mode:<5} {les or '온전':<7} | {g('aimed')*100:6.1f}% "
         f"{g('hits')/max(g('shots'),1)*100:9.1f}% {g('near'):7.1f}도 "
-        f"| {g('life'):10.0f} {g('score'):7.0f}")
+        f"| {g('life_per_death'):10.0f} {g('score'):7.0f}")
     del pol; gc.collect(); torch.cuda.empty_cache()
 
 Path("out").mkdir(exist_ok=True)
@@ -122,9 +127,9 @@ def d(a, b, k):
 
 
 say("\n=== 이중 해리 ===")
-say(f"{'':22s} {'조준 (각폭 안)':>16s} {'회피 (목숨당 생존)':>20s}")
+say(f"{'':22s} {'조준 (각폭 안)':>16s} {'회피 (죽음당 생존)':>20s}")
 for mode in ("도망", "쫓기"):
     for les in ("LC10a", "DNp11"):
         say(f"{mode} 모드에서 {les:>6s} 끄기  {d(f'{mode}/온전', f'{mode}/{les}', 'aimed'):+14.1f}% "
-            f"{d(f'{mode}/온전', f'{mode}/{les}', 'life'):+19.1f}%")
+            f"{d(f'{mode}/온전', f'{mode}/{les}', 'life_per_death'):+19.1f}%")
 say("\n저장: out/gate4_dissoc.json")

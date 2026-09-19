@@ -53,6 +53,7 @@ def bg_pixels(img):
 action = (A.index("NOOP"), A.index("FIRE"))
 names = {}                       # 관측된 객체 타입 이름
 ast_series, ship_seen, lit, lit2 = [], [], [], []
+ship_ys = []                      # 이슈 #56: 배 좌표가 놀이터 안인지 보려고 모은다
 v_nonzero, v_total = 0, 0
 n_fire_obj = 0
 acts = {"UP": 0, "LEFT": 0, "RIGHT": 0, "NOOP": 0, "기타": 0}
@@ -82,6 +83,7 @@ for f in range(MAXF):
     if f % ACT_EVERY: continue
     xy, head, looms = V.looming(env.objects)
     ship_seen.append(xy is not None)
+    if xy is not None: ship_ys.append(float(xy[1]))
     for L in looms:
         v_total += 1
         if abs(L.get("dtheta", 0.0)) > 1e-12: v_nonzero += 1
@@ -177,6 +179,24 @@ say(f"     웨이브 전환(운석 재보충) {rises}회 — 짧은 주행에선
 say(f"     좌/우 회전 편향 {bias*100:+.1f}%  (좌 {acts['LEFT']} 우 {acts['RIGHT']}) — 이슈 #32")
 say(f"     추진 비율 {acts['UP']/max(dec,1)*100:.1f}%   운석 수 {ast.min()}~{ast.max()}")
 say(f"     화면 켜진 픽셀 합성 전 {np.mean(lit):.0f} / 합성 후 {np.mean(lit2):.0f}")
+
+# ---------------------------------------------------------------- 10·11 랩어라운드 (이슈 #56)
+# 🔴 화면 감싸기를 방위각 계산이 무시하고 있었다. 배 속도와 운석 추적에는 보정이 있었는데
+#    정작 뇌 입력을 만드는 `_rel` 에만 없었다. 헤드리스 지표는 못 잡았다 —
+#    **가장 가까운 운석의 정체가 14.4% 의 결정에서 바뀌는데도** 점수·생존·발화가 다 그럴듯했다.
+#    그래서 '값이 그럴듯한가'가 아니라 **'보정이 실제로 걸리는가'** 를 단위로 검사한다.
+import vision as _VS
+_r = _VS._rel(155.0, 100.0, 5.0, 100.0)          # 이음매를 건너는 쌍
+chk("감싸기 보정이 켜져 있다", abs(_r[0] + 10.0) < 1e-6,
+    f"x=5 배 / x=155 운석 -> 상대 x {_r[0]:+.1f} (주기 {_VS.WRAP_X:.0f})", "-10.0")
+_ry = _VS._rel(100.0, 190.0, 100.0, 20.0)[1]*_VS.ASPECT
+chk("y 감싸기 주기가 놀이터 값이다", abs(_ry - 8.0) < 1e-6,
+    f"y=20 배 / y=190 운석 -> 상대 y {_ry:+.1f} (주기 {_VS.WRAP_Y:.0f})", "+8.0 (주기 178)")
+
+# 배 좌표가 놀이터 안인가. OCAtari 는 배가 위로 나가는 순간 y 를 520~528 로 보고한다.
+_bad = sum(1 for y in ship_ys if not (_VS.FIELD_Y0 - 4 <= y <= _VS.FIELD_Y1 + 4))
+chk("배 좌표가 놀이터 안이다", _bad == 0,
+    f"놀이터 밖 {_bad}/{len(ship_ys)}", "0")
 
 say("")
 say("="*70)
