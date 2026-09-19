@@ -18,14 +18,37 @@ ASPECT = 2.0          # 세로 팽창 계수 (실측)
 DEG_PER_ORIENT = 22.5
 ORIENT0_DEG = 90.0    # orientation 0 = 화면 위쪽
 
+# 🔴 [이슈 #56] 화면 랩어라운드. **화면을 본 사람이 물어서 찾았다** (네 번째다).
+#   예전엔 _rel() 에 감싸기 보정이 아예 없었다. 배 속도와 운석 추적에는 있었는데,
+#   정작 뇌에 들어가는 방위각을 만드는 곳에만 빠져 있었다.
+#   실측(뇌 정책, 12,499쌍): x 축만 봐도 21.8% 가 감싸기가 더 가깝고,
+#   **가장 가까운 운석의 정체가 바뀌는 결정이 14.4%** 였다.
+#
+#   주기는 렌더된 화면의 비배경 픽셀로 직접 쟀다 (probe_wrap9.py):
+#     열 0~159        -> WRAP_X = 160   (자가시험: 배를 옆으로 밀어 x=4 -> 164, d=160 과 일치)
+#     행 5~14  점수 HUD (누적 7~15만 px)
+#     행 15~16 빈 줄
+#     행 18~194 놀이터 (행마다 약 3,700px 고르게)  -> WRAP_Y = 177
+#   예전 코드는 y 주기를 **210**(화면 높이)으로 쓰고 있었다. 놀이터 높이가 아니다.
+#   ⚠️ 측정 방법 2개가 자가시험에서 떨어진 뒤 이 방법으로 왔다 (probe_wrap7/8 주석 참조).
+WRAP_X = 160.0
+WRAP_Y = 177.0
+# 놀이터 세로 범위. 이 밖의 Player 좌표는 **쓰레기다** (아래 PLAYFIELD 주석).
+FIELD_Y0, FIELD_Y1 = 18.0, 194.0
+
 
 def ship_heading_deg(orientation):
     return (ORIENT0_DEG + DEG_PER_ORIENT*float(orientation)) % 360.0
 
 
+def _wrap(d, p):
+    """토러스에서의 최단 변위."""
+    return d - p*np.round(d/p)
+
+
 def _rel(ax, ay, sx, sy):
-    """종횡비 보정된 상대 위치 (수학 좌표: y 위쪽)."""
-    return (ax - sx), -(ay - sy)/ASPECT
+    """종횡비 보정된 상대 위치 (수학 좌표: y 위쪽). **화면 감싸기 보정 포함.**"""
+    return _wrap(ax - sx, WRAP_X), -_wrap(ay - sy, WRAP_Y)/ASPECT
 
 
 class Vision:
@@ -56,7 +79,15 @@ class Vision:
             w, h = o.wh
             if w <= 0 or h <= 0:          # 7.09% 가 쓰레기
                 continue
-            if name == "Player": ship = o
+            if name == "Player":
+                # 🔴 [이슈 #56] 배가 화면 위로 나가는 순간 OCAtari 가 y 를 **520~528** 로
+                #   보고한다 (화면 높이는 210). 예전엔 그걸 그대로 배 위치로 썼다 —
+                #   **전체 뇌 정책에서 프레임의 18.9%.** 그 프레임은 모든 방위각이 틀리고
+                #   배 속도(관성 보정 입력)도 튄다. 놀이터 밖이면 '배 없음'으로 처리한다.
+                #   (배 부재는 이미 09문서대로 다루고 있다 — 자극만 비우고 뇌는 계속 돌린다.)
+                y = float(o.xy[1])
+                if FIELD_Y0 - 4.0 <= y <= FIELD_Y1 + 4.0:
+                    ship = o
             elif name == "Asteroid": asts.append(o)
         return ship, asts
 
@@ -73,8 +104,8 @@ class Vision:
         if self.prev_ship is None:
             svx = svy = 0.0
         else:
-            dx = sx - self.prev_ship[0]; dy = sy - self.prev_ship[1]
-            dx -= 160.0*round(dx/160.0); dy -= 210.0*round(dy/210.0)
+            dx = float(_wrap(sx - self.prev_ship[0], WRAP_X))
+            dy = float(_wrap(sy - self.prev_ship[1], WRAP_Y))
             svx, svy = dx, -dy/ASPECT
         self.prev_ship = (sx, sy)
         self.ship_v = (float(svx), float(svy))
@@ -107,8 +138,8 @@ class Vision:
             for j, (px, py, pw, ph, pth, pid) in enumerate(self.prev):
                 if pw != w or ph != h or j in used:
                     continue
-                ddx = ax - px; ddy = ay - py
-                ddx -= 160.0*round(ddx/160.0); ddy -= 210.0*round(ddy/210.0)
+                ddx = float(_wrap(ax - px, WRAP_X))
+                ddy = float(_wrap(ay - py, WRAP_Y))
                 dd = ddx*ddx + ddy*ddy
                 if dd < bd: bd, best, bi = dd, pth, j
             if best is not None and bd <= (16.0*self.dt_frames)**2:
