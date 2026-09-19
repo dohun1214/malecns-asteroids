@@ -204,6 +204,10 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
     ev_total = {R: 0 for R in radii}
     ev_hit = {R: 0 for R in radii}
     lives_prev = None
+    # 🔴 [이슈 #56] `mean_life` 는 '배가 보이는 구간' 으로 센다. 랩어라운드 수정으로
+    #   배 부재 판정이 바뀌자(배 보임 85.5% -> 74.7%) 구간이 더 자주 끊겨 **지표가 흔들렸다.**
+    #   정책 간 비교에는 `lives` 감소로 센 `life_per_death` 를 쓴다 — 화면 판정과 무관하다.
+    n_deaths = 0
     for f in range(max_frames):
         obs, rew, trunc, term, info = env.step(
             frame_action(action[0], action[1], f))         # OCAtari 순서
@@ -223,6 +227,7 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
         # --- 사건 추적: 피격은 목숨 감소로 판정한다 (Player 소실은 하이퍼스페이스와 구분 불가)
         lives = info.get("lives", None) if isinstance(info, dict) else None
         hit_now = (lives_prev is not None and lives is not None and lives < lives_prev)
+        if hit_now: n_deaths += 1
         lives_prev = lives
         for R in radii:
             op = ev_open[R]; near = set()
@@ -267,7 +272,10 @@ def run_episode(env, policy, V, actions, max_frames=9000, rng=None, log=None, fi
                 exposure=ev_total[R0]/max(frames,1)*1000.0,
                 mean_life=float(np.mean(alive_runs)) if alive_runs else 0.0,
                 max_life=float(max(alive_runs)) if alive_runs else 0.0,
-                n_lives=len(alive_runs))
+                n_lives=len(alive_runs),
+                # ★ 정책 간 비교에는 이쪽을 쓸 것 (화면 판정과 무관)
+                n_deaths=n_deaths,
+                life_per_death=float(frames)/float(n_deaths + 1))
 
 
 def make_env():
