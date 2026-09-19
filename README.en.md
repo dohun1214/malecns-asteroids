@@ -57,15 +57,15 @@ The stimulus sequence an intact brain actually saw is recorded to a **tape** and
 
 | Manipulation | Cells | Action agreement | Thrust | Fore/aft channel |
 |---|---:|---:|---:|---:|
-| Intact | — | 100.0 % | 28.6 % | −0.075 |
-| **Random 2 cells** (5 seeds) | 2 | **100.00 ± 0.00 %** | 28.6 % | −0.075 |
-| Random 200 cells | 200 | 86.9 % | 28.6 % | −0.077 |
-| **DNp11** | **2** | **56.6 %** | **0.0 %** | **+0.729** ← sign flip |
-| **DNp02** | **2** | **66.3 %** | 53.0 % | −0.756 |
-| DNp04 / DNp01 (GF) | 2 | 82.0 % / 86.0 % | 30.4 % / 26.2 % | ~unchanged |
+| Intact | — | 100.0 % | 28.5 % | −0.096 |
+| **Random 2 cells** (5 seeds) | 2 | **100.00 ± 0.00 %** | 28.5 % | −0.096 |
+| Random 200 cells | 200 | 90.7 ± 4.7 % | 28.5 % | −0.098 |
+| **DNp11** | **2** | **58.1 %** | **0.0 %** | **+0.703** ← sign flip |
+| **DNp02** | **2** | **68.6 %** | 52.7 % | −0.749 |
+| DNp04 / DNp01 (GF) | 2 | 81.6 % / 86.1 % | 31.5 % / 24.1 % | ~unchanged |
 
 Silencing two DNp11 cells changes far more than silencing 200 random ones.
-The dose response is monotonic (100 → 83.4 → 76.1 → 65.2 → 0 %) and survives three
+The dose response is monotonic (100 → 83.7 → 78.6 → 66.5 → 0 %) and survives three
 different controller parameter sets.
 
 ### ② Nothing is silenced — only the *wiring* is shuffled — and it still breaks
@@ -75,12 +75,12 @@ The uninformed baseline is 90°.
 
 | Condition | Escape-azimuth error | Fraction of the distance to chance |
 |---|---:|---:|
-| Intact | **63.4°** | — |
-| Shuffle all LC4 projections | 99.6° | **136 %** |
-| LC4 → DN only | 87.2° | 90 % |
-| LC4 → DNp02/11 only | 74.6° | 42 % |
-| **Same size, shuffled elsewhere** | 63.1° | **−1 %** |
-| Synapse-matched control / LPLC2→DN | 63.4° | **0 %** |
+| Intact | **61.3°** | — |
+| Shuffle all LC4 projections | 100.2° | **135.5 %** |
+| LC4 → DN only | 82.7° | 74.6 % |
+| LC4 → DNp02/11 only | 71.8° | 36.5 % |
+| **Same size, shuffled elsewhere** | 60.9° | **−1.4 %** |
+| Synapse-matched control / LPLC2→DN | 61.3° | **0 %** |
 
 ### ③ Branch recordings from a byte-identical starting point
 
@@ -114,14 +114,14 @@ breaks it."* Switching off **the same 275 cells** and getting opposite results p
 | | Aiming (on-target fraction) | Avoidance (frames per life) |
 |---|---:|---:|
 | **Flee** mode, LC10a off | **+0.0 %** (identical to the decimal) | **+0.0 %** |
-| Flee mode, DNp11 off | +25.6 % | **−60.9 %** |
-| **Chase** mode, LC10a off | **−100.0 %** | −19.5 % |
-| Chase mode, DNp11 off | +41.5 % | −0.2 % |
+| Flee mode, DNp11 off | +69.0 % | **−72.8 %** |
+| **Chase** mode, LC10a off | **−100.0 %** | −18.2 % |
+| Chase mode, DNp11 off | −38.0 % | +1.3 % |
 
-The nose really does turn: angular distance to the nearest asteroid goes **124.7° → 67.9°**.
-As a negative control, silencing **the same number (275) of random cells** costs aiming
-**nothing at all** (8.5 ± 2.3 % vs 5.5 % intact, 5 seeds). Only when those 275 cells are
-LC10a does it go to 0 %.
+The nose really does turn: angular distance to the nearest asteroid goes **110.1° → 55.7°**.
+As a negative control, silencing **the same number (275) of random cells** barely costs
+anything (8.3 ± 0.8 % vs 9.6 % intact, 5 seeds). Only when those 275 cells are LC10a
+does it go to **0 %**.
 
 **And the direction disappears without switching off a single cell.**
 Shuffling only the **335 edges** of `LC10a → AOTU019/025` (0.0032 % of the graph), 10 seeds:
@@ -138,14 +138,16 @@ Shuffling only the **335 edges** of `LC10a → AOTU019/025` (0.0032 % of the gra
 | Size-matched random excitatory edges | −0.1 % |
 
 **A lesion left 0 % of the signal** — which invites "you just cut the input". Rewiring leaves the
-signal intact and removes only its direction. In the actual game the angular distance to the
-nearest asteroid widens from **67.9° to 83.0°** (a same-size shuffle of other LC10a outputs
-stays at 63.9°), while **100 % of decisions still carry a steering signal.**
+signal intact and removes only its direction. In the actual game (6 seeds):
 
-> 🔴 The narrow on-target fraction shows nothing in-game (5.5 % intact vs 6.1 ± 1.5 % shuffled) —
-> with an intact value that small the metric drowns in noise, so **read the angle instead.**
-> Before issue #56 was fixed the same metric read −52.9 %; that number was an artifact of the
-> screen-wrap bug.
+| | Intact | Wiring shuffled | Other-output control (4 seeds) |
+|---|---:|---:|---:|
+| On-target fraction | 9.6 % | **5.3 ± 0.5 %** (−44.8 %) | 8.6 ± 1.8 % (−10.4 %) |
+| Angle to nearest asteroid | 55.7° | **80.2 ± 3.2°** | 66.8 ± 1.5° |
+| Decisions carrying a signal | 100 % | **100 %** | 100 % |
+
+> 🔴 This result is **extremely sensitive to the wrap period.** With y off by a single pixel (177)
+> the same measurement read +11.2 % — the effect vanished. Closed loops do that. See issues #56/#60.
 
 ---
 
@@ -246,7 +248,7 @@ screen ─▶ Vision ─▶ LC4Map ─▶ [ 166,700-neuron LIF ] ─▶ Decoder 
 | `pursuit_targets.py` | pursuit readout | 550 left / 526 right VNC cells; cross-projection under 0.1 % |
 | `play.py` | game loop | 60 Hz pacing, one decision every 4 frames. `BrainPolicy` (flee) / `PursuitPolicy` (chase) |
 | `server.py` | dashboard server | 60 Hz sim thread + single-slot mailbox + WebSocket |
-| `sanity.py` | automated checks | 9 assertions **plus a self-test** |
+| `sanity.py` | automated checks | **12 assertions** plus a self-test (including unit checks on wrap correction) |
 
 ### Why it is bit-reproducible
 
@@ -267,9 +269,9 @@ This repository also records **what does not work**. That is part of the evidenc
 |---|---|
 | DNp02 fires above the literature's subthreshold report | ❌ Intrinsic limit of whole-brain LIF. **Never quote absolute Hz** |
 | GF azimuth dependence is the opposite of the literature | ❌ Same limit. No design impact — GF is not used for direction |
-| Left-turn bias of +15.1 % | ⏸ Diagnosed: not LC4 cell count, but **per-cell synaptic strength (right 10 % stronger)** and a **39 % mismatch in DN→readout ipsi/contra ratio**. Deliberately **not corrected**, to avoid adding a fitted constant. *A rule-based controller on the same geometry leans the other way (−13.8 %)* |
-| Accuracy of the y wrap period (177) | ⚠️ Measured as the playfield's vertical extent (rows 18–194) in rendered frames. **±2 px uncertain.** A behavioural check had no discriminating power (`probe_wrapval.py`). It is 33 px closer than the previous value of 210 |
-| The `frames per life` metric | ⚠️ Counted as runs where the ship is visible. Fixing issue #56 changed ship-absence detection (85.5 % → 74.7 %), so runs break more often. **Do not compare policies on it** |
+| Left-turn bias of +29.0 % | ⏸ Diagnosed: not LC4 cell count, but **per-cell synaptic strength (right 10 % stronger)** and a **39 % mismatch in DN→readout ipsi/contra ratio**. Deliberately **not corrected**, to avoid adding a fitted constant. *A rule-based controller on the same geometry leans the other way (−13.4 %).* ⚠️ **The sign structure is stable; the magnitude is not** — it is a closed loop. Always quote the setup |
+| ~~Accuracy of the y wrap period~~ | ✅ **Pinned at 178.** Caught open-loop from asteroid wrap events: **86 events, all 178, sd 0.0** (`probe_wrap12.py`). Five measurement attempts failed first — notably, **a closed-loop behavioural scan cannot resolve it in principle** |
+| The `frames per life` metric | ✅ **Replaced.** Ship-visibility runs are sensitive to detection changes → use `life_per_death` (= frames / (deaths + 1)). The old metric is kept for reference |
 | Escape direction error of 82.8° | ⏸ Still large after inertia compensation. The dominant cause is that **the target moves faster than the ship can turn** (55 % of target changes exceed the 22.5° per-decision turn). Structural, given the real-time budget |
 | A supervised MLP does better | ⏸ 43.6° vs 56.2°. Not a refutation, but we do not claim the connectome is optimal |
 | Sign of the fore/aft axis | ⚠️ An imposed value. Confirmed indirectly by behaviour (it flees threats) |
@@ -297,11 +299,12 @@ and **screen wraparound** (issue #56).
 | # | What | Size |
 |---|---|---|
 | 5a | **No wrap correction in the bearing computation** (ship velocity and asteroid tracking had it) | 21.8 % of pairs on the x axis alone; **the nearest asteroid is a different one on 14.4 % of decisions** |
-| 5b | The y wrap period used **screen height 210** (the playfield is 177) | — |
+| 5b | The y wrap period used **screen height 210** (it is **178**) | **Five** measurement methods failed before it was pinned |
 | 5c | `Player.y` is reported as **520–528** as the ship exits the top, and we used it as the ship | **18.9 % of frames** under the whole-brain policy |
 
-After the fix **the brain beats the rule-based controller for the first time**, and over half of
-the left-turn bias disappeared (+37.5 % → +15.1 %). Every gate was re-measured and all still pass.
+After the fix **the brain beats the rule-based controller for the first time.** Every gate was
+re-measured and all still pass. `sanity.py` gained **three unit checks that assert the correction
+actually fires** (9 → 12) — they test whether the behaviour happens, not whether numbers look right.
 
 **The first three were caught by measurement. The fourth was caught by a human looking at the screen.**
 That is why `sanity.py` exists — it does not check whether results are good, it checks whether
@@ -313,7 +316,7 @@ things **actually happen**.
 > **do not change this value.**
 
 > **Scores** (8 episodes, 6,000-frame cap, random no-op start):
-> whole brain **1,815 ± 617** · rule-based 1,445 ± 405 · do-nothing 399 ± 298.
+> whole brain **1,702 ± 489** · rule-based 1,405 ± 419 · do-nothing 399 ± 298.
 > The brain **wins** — before issue #56 was fixed the two were tied within 1σ (2,332 vs 2,480).
 
 ---
