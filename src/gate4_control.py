@@ -113,5 +113,5 @@ say(f"  무작위 275  {am*100:.1f} ± {asd*100:.1f}%   ({(am-a0)/a0*100:+.1f}%)
 if a0 > 0:
     per_cell = abs((aL-a0)/a0) / max(abs((am-a0)/a0), 1e-9)
     say(f"  -> LC10a 가 같은 수의 무작위보다 {per_cell:.1f}배")
-json.dump(R, open("out/gate4_control.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open("out/gate4_control.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/gate4_control.json")

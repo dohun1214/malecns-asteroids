@@ -139,5 +139,5 @@ for k in watch:
 R["C"] = {k: acc[k]/max(nd, 1) for k in watch}
 
 Path("out").mkdir(exist_ok=True)
-json.dump(R, open("out/fire_ceiling.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open("out/fire_ceiling.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/fire_ceiling.json")

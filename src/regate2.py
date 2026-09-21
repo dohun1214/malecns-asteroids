@@ -1,4 +1,7 @@
-"""🔴 11문서의 '게임 실력 주장 철회'를 **발사가 실제로 되는 상태에서** 다시 잰다.
+"""
+🔴 [이슈 #60] 생존은 `life_per_death`(= 프레임 / (죽은 횟수+1)) 로 잰다.
+   예전의 `mean_life` 는 '배가 보이는 구간'이라 화면 판정이 바뀌면 흔들렸다.
+🔴 11문서의 '게임 실력 주장 철회'를 **발사가 실제로 되는 상태에서** 다시 잰다.
 
 철회 당시 우리는 "발사를 모든 정책에 고정했다"고 믿고 있었다. 실제로는 결정당 4프레임 내내
 FIRE 를 누르고 있어서 **한 발도 안 나가고 있었다** (probe_fire4.py).
@@ -24,7 +27,7 @@ def bench(pol, fire, seed=12345):
     rs = [run_episode(env, pol, V, A, max_frames=MAXF, rng=rng, fire=fire)
           for _ in range(N_EP)]
     f = lambda k: (float(np.mean([r[k] for r in rs])), float(np.std([r[k] for r in rs])))
-    return dict(score=f("score"), life=f("mean_life"), frames=f("frames"),
+    return dict(score=f("score"), life=f("life_per_death"), frames=f("frames"),
                 up=f("up_frac"), lives=f("n_lives"))
 
 
@@ -51,7 +54,7 @@ for fire in (True, False):
 
 b = out["전체 뇌 166,700|True"]; n = out["가만히 있기|True"]; g = out["규칙 기반|True"]
 say(f"\n{'='*78}\n판정 (발사 작동 기준)")
-for k, lab in (("score", "점수"), ("life", "목숨당 생존")):
+for k, lab in (("score", "점수"), ("life", "죽음당 생존")):
     say(f"  {lab}: 뇌 {b[k][0]:.0f}  vs 가만히 {n[k][0]:.0f}  vs 규칙 {g[k][0]:.0f}"
         f"   -> 뇌가 가만히보다 {'낫다' if b[k][0] > n[k][0] else '못하다'}"
         f" ({b[k][0]/max(n[k][0],1e-9):.2f}배)")

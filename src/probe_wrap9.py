@@ -67,5 +67,5 @@ say(f"\n열 범위: {nzc.min()} ~ {nzc.max()}  (폭 {nzc.max()-nzc.min()+1})  "
     f"<- 자가시험: 160 이어야 한다")
 json.dump(dict(rows=[[int(a), int(b)] for a, b in bands],
                col_lo=int(nzc.min()), col_hi=int(nzc.max())),
-          open("out/probe_wrap9.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrap9.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("저장: out/probe_wrap9.json")

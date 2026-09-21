@@ -128,5 +128,5 @@ for k in Rres:
     lost = (base["r"] - Rres[k]["r"])/base["r"]*100 if base["r"] != 0 else 0
     keep = Rres[k]["amp"]/base["amp"]*100
     say(f"  {k:<26} 방향 소실 {lost:6.1f}%   신호 크기 유지 {keep:6.1f}%")
-json.dump(Rres, open(OUT/"gate4_rewire.json", "w"), ensure_ascii=False, indent=1)
+json.dump(Rres, open(OUT/"gate4_rewire.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/gate4_rewire.json")

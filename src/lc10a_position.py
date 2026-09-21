@@ -93,5 +93,5 @@ for s in ("L", "R"):
     say(f"  LC4 {s} {int(m.sum()):3d}세포  축 범위 {ax4[m].min():7.2f} ~ {ax4[m].max():7.2f}")
     rep[f"lc4_{s}"] = dict(lo=float(ax4[m].min()), hi=float(ax4[m].max()))
 
-json.dump(rep, open(OUT/"lc10a_position.json", "w"), ensure_ascii=False, indent=1)
+json.dump(rep, open(OUT/"lc10a_position.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say(f"\n저장: graph/lc10a_position.npz, out/lc10a_position.json")

@@ -112,6 +112,6 @@ for name, pol in (("전체 뇌", brain), ("규칙 기반", greedy), ("가만히 
     print(f"  발사당 명중률  {agg(rows,'hits')/max(agg(rows,'shots'),1)*100:.1f}%")
 
 Path(__file__).resolve().parent.parent.joinpath("out").mkdir(exist_ok=True)
-json.dump(out, open(Path(__file__).resolve().parent.parent/"out"/"fire_aim.json", "w"),
+json.dump(out, open(Path(__file__).resolve().parent.parent/"out"/"fire_aim.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
 print("\n저장: out/fire_aim.json", flush=True)

@@ -59,6 +59,6 @@ for f in range(FRAMES):
 say(f"\n`Vision.parse` 가 고른 배의 y 가 210 을 넘는 비율: {bad}/{tot} "
     f"({bad/max(tot,1)*100:.1f}%)")
 json.dump(dict(counts={str(k): v for k, v in cnt.items()},
-               bad=bad, tot=tot), open("out/probe_player.json", "w"),
+               bad=bad, tot=tot), open("out/probe_player.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
 say("저장: out/probe_player.json")

@@ -61,5 +61,5 @@ for nm, j in (("x", jx), ("y", jy)):
 json.dump(dict(xmin=float(allx.min()), xmax=float(allx.max()),
                ymin=float(ally.min()), ymax=float(ally.max()),
                jx=[float(v) for v in jx[:200]], jy=[float(v) for v in jy[:200]]),
-          open("out/probe_wrap2.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrap2.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/probe_wrap2.json")

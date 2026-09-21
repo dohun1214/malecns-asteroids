@@ -100,5 +100,5 @@ say("  " + "  ".join(f"{p:+5.0f}" for p in PHIS))
 say("  " + "  ".join(f"{c:+5.2f}" for c in np.array(R['intact']['ch'])))
 
 json.dump({k: {kk: vv for kk, vv in v.items()} for k, v in R.items()},
-          open(OUT/"gate4_sweep.json", "w"), ensure_ascii=False, indent=1)
+          open(OUT/"gate4_sweep.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/gate4_sweep.json")

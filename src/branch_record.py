@@ -24,6 +24,7 @@ import numpy as np, torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from play import BrainPolicy, make_env, Vision, ACT_EVERY, with_fire, frame_action
+from vision import player_xy
 import rewire as RW
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,7 +89,7 @@ def restore(s):
 def ship_xy():
     for o in env.objects:
         if o and type(o).__name__ == "Player" and o.wh[0] > 0:
-            return float(o.xy[0]), float(o.xy[1])
+            return player_xy(o)   # [이슈 #63] 부호 복원
     return None
 
 

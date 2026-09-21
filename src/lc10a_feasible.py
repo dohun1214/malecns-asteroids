@@ -188,5 +188,5 @@ if len(store) == 2:
     say(f"  순열검정 {NPERM}회 (우반구): p = {p:.4f}")
     R["perm_p"] = p
 
-json.dump(R, open(OUT/"lc10a_feasible.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open(OUT/"lc10a_feasible.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/lc10a_feasible.json")

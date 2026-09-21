@@ -62,4 +62,4 @@ for turns, axis, name, lo, hi in ((0, 1, "y", 50.0, 140.0), (4, 0, "x", 50.0, 11
     say(f"   랩 간격(프레임) {r['gaps'][:8]}")
     say(f"   주기 {np.round(P,1)[:8]}")
     say(f"   **중앙 {np.median(P):.1f}   평균 {P.mean():.1f} ± {P.std():.1f}**")
-json.dump({}, open("out/probe_wrap8.json", "w"))
+json.dump({}, open("out/probe_wrap8.json", "w", encoding="utf-8"))

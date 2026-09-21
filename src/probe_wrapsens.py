@@ -91,5 +91,5 @@ for k, nm in (("score", "점수"), ("near", "최근접각"), ("bias", "좌회전
     say(f"  169~177 범위 안 {nm:10s} {min(v):8.1f} ~ {max(v):8.1f}"
         f"   (폭 {max(v)-min(v):.1f})   |  옛 값 210 에서는 {R[210][k]:.1f}")
 json.dump({str(k): v for k, v in R.items()},
-          open("out/probe_wrapsens.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrapsens.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/probe_wrapsens.json")

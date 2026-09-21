@@ -53,6 +53,7 @@ def bg_pixels(img):
 action = (A.index("NOOP"), A.index("FIRE"))
 names = {}                       # 관측된 객체 타입 이름
 ast_series, ship_seen, lit, lit2 = [], [], [], []
+n_blind = 0
 ship_ys = []                      # 이슈 #56: 배 좌표가 놀이터 안인지 보려고 모은다
 v_nonzero, v_total = 0, 0
 n_fire_obj = 0
@@ -83,6 +84,10 @@ for f in range(MAXF):
     if f % ACT_EVERY: continue
     xy, head, looms = V.looming(env.objects)
     ship_seen.append(xy is not None)
+    # [이슈 #63] Player 가 있는데 배를 못 본 결정 (= 초파리가 눈을 감은 결정)
+    if xy is None and any(o and type(o).__name__ == "Player" and o.wh[0] > 0
+                          for o in env.objects):
+        n_blind += 1
     if xy is not None: ship_ys.append(float(xy[1]))
     for L in looms:
         v_total += 1
@@ -193,8 +198,13 @@ _ry = _VS._rel(100.0, 190.0, 100.0, 20.0)[1]*_VS.ASPECT
 chk("y 감싸기 주기가 놀이터 값이다", abs(_ry - 8.0) < 1e-6,
     f"y=20 배 / y=190 운석 -> 상대 y {_ry:+.1f} (주기 {_VS.WRAP_Y:.0f})", "+8.0 (주기 178)")
 
-# 배 좌표가 놀이터 안인가. OCAtari 는 배가 위로 나가는 순간 y 를 520~528 로 보고한다.
-_bad = sum(1 for y in ship_ys if not (_VS.FIELD_Y0 - 4 <= y <= _VS.FIELD_Y1 + 4))
+# 배 좌표가 놀이터 안인가. OCAtari 는 배가 위로 나가는 순간 y 를 520~528 로 보고한다
+# (부호 없는 바이트). [이슈 #63] 부호를 복원하면 8~16 이다.
+class _P: xy = (80.0, 528.0)
+chk("배 y 부호 복원 (528 → 16)", _VS.player_xy(_P)[1] == 16.0,
+    f"{_VS.player_xy(_P)[1]}", "16.0")
+chk("Player 가 있으면 배를 본다", n_blind == 0, f"눈 감은 결정 {n_blind}", "0")
+_bad = sum(1 for y in ship_ys if not (_VS.FIELD_Y0 - 12 <= y <= _VS.FIELD_Y1 + 4))
 chk("배 좌표가 놀이터 안이다", _bad == 0,
     f"놀이터 밖 {_bad}/{len(ship_ys)}", "0")
 

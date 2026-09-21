@@ -1,27 +1,27 @@
 {
   "frames": 3000,
-  "decisions": 643,
-  "score": 930.0,
-  "drops": 11,
+  "decisions": 654,
+  "score": 1180.0,
+  "drops": 13,
   "rises": 1,
-  "ship_visible": 0.8573333333333333,
-  "v_nonzero": 2252,
-  "v_total": 2558,
+  "ship_visible": 0.872,
+  "v_nonzero": 2139,
+  "v_total": 2434,
   "lit_min": 192,
   "lit2_min": 422,
   "spk_min": 0,
   "acts": {
-    "UP": 188,
-    "LEFT": 221,
-    "RIGHT": 232,
-    "NOOP": 2,
+    "UP": 180,
+    "LEFT": 249,
+    "RIGHT": 224,
+    "NOOP": 1,
     "기타": 0
   },
-  "turn_bias": -0.024282560706401765,
+  "turn_bias": 0.052854122621564484,
   "objects": {
     "Player": 2615,
-    "Asteroid": 12795,
-    "PlayerMissile": 4944
+    "Asteroid": 12130,
+    "PlayerMissile": 4924
   },
   "fail": []
 }

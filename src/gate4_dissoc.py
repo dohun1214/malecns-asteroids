@@ -118,7 +118,7 @@ for mode, les in CONDS:
     del pol; gc.collect(); torch.cuda.empty_cache()
 
 Path("out").mkdir(exist_ok=True)
-json.dump(R, open("out/gate4_dissoc.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open("out/gate4_dissoc.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 def d(a, b, k):

@@ -115,5 +115,5 @@ say(f"  배선 섞기   {np.mean(rw)*100:.1f} ± {np.std(rw)*100:.1f}%"
     f"  ({(np.mean(rw)-a0)/a0*100:+.1f}%)   **신호 {np.mean(sg)*100:.1f}% 유지**")
 say(f"  다른 출력   {np.mean(ot)*100:.1f} ± {np.std(ot)*100:.1f}%"
     f"  ({(np.mean(ot)-a0)/a0*100:+.1f}%)")
-json.dump(R, open("out/gate4_rewire_game.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open("out/gate4_rewire_game.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/gate4_rewire_game.json")

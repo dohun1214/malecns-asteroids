@@ -80,4 +80,4 @@ say(f"\n★ 자가시험: x 에서 편향 최소 {bx} / 각거리 최대 {nx}  (
 json.dump(dict(y={str(k): v for k, v in oy.items()},
                x={str(k): v for k, v in ox.items()},
                best_y=by, best_x=bx),
-          open("out/probe_wrapfit.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrapfit.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)

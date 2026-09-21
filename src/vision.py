@@ -43,6 +43,17 @@ WRAP_Y = 178.0
 FIELD_Y0, FIELD_Y1 = 18.0, 194.0
 
 
+def player_xy(o):
+    """Player 좌표. 🔴 [이슈 #63] OCAtari 는 y = 100 + 2*(ram[74] - 41) 을 **부호 없는 바이트**로
+    계산한다. 배가 놀이터 윗가장자리를 넘으면 ram[74] 가 255, 254, ... (= -1, -2, ...) 가 되어
+    y 가 520~528 로 나온다. 부호 있는 바이트로 읽으면 y = 8~16 — 놀이터(18~194) 바로 위다.
+    실측(probe_band): 그 프레임에 배는 화면 **윗줄 18~26 행과 아랫줄 188~194 행에 나뉘어
+    실제로 그려져 있다.** 쓰레기가 아니라 감싸기 중인 배다. (ram 값 기준 -512 와 같다)"""
+    x, y = float(o.xy[0]), float(o.xy[1])
+    if y > 400.0: y -= 512.0
+    return x, y
+
+
 def ship_heading_deg(orientation):
     return (ORIENT0_DEG + DEG_PER_ORIENT*float(orientation)) % 360.0
 
@@ -91,8 +102,13 @@ class Vision:
                 #   **전체 뇌 정책에서 프레임의 18.9%.** 그 프레임은 모든 방위각이 틀리고
                 #   배 속도(관성 보정 입력)도 튄다. 놀이터 밖이면 '배 없음'으로 처리한다.
                 #   (배 부재는 이미 09문서대로 다루고 있다 — 자극만 비우고 뇌는 계속 돌린다.)
-                y = float(o.xy[1])
-                if FIELD_Y0 - 4.0 <= y <= FIELD_Y1 + 4.0:
+                # 🔴 [이슈 #63] 위 #56 의 판단은 틀렸다. 520~528 은 쓰레기가 아니라 OCAtari 의
+                #   부호 변환 누락이었다 (player_xy). 그걸 '배 없음'으로 버리면 **배가 화면에
+                #   그려져 있는데 초파리는 눈을 감는다** — 자극이 비고 정책이 NOOP 을 내서
+                #   배가 감속해 그 띠에 멈춰 버린다 (규칙 정책, 시드 2: 띠 구간 평균 437프레임).
+                #   부호를 복원하고, 그래도 놀이터 밖이면 그때만 버린다.
+                y = player_xy(o)[1]
+                if FIELD_Y0 - 12.0 <= y <= FIELD_Y1 + 4.0:
                     ship = o
             elif name == "Asteroid": asts.append(o)
         return ship, asts
@@ -104,7 +120,7 @@ class Vision:
         if ship is None:
             self.prev_ship = None; self.ship_v = (0.0, 0.0)
             return None, None, []
-        sx, sy = float(ship.xy[0]), float(ship.xy[1])
+        sx, sy = player_xy(ship)
         head = ship_heading_deg(getattr(ship, "orientation", 0))
         # 배 속도 (직접 차분, 랩어라운드 보정)
         if self.prev_ship is None:

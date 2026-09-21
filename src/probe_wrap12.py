@@ -113,4 +113,4 @@ else:
         f"  -> {cx.most_common(1)[0][0]} (정답 160)")
 json.dump(dict(n=len(ev), vals=[float(v) for v in ev[:200]],
                x_n=len(evx), x_vals=[float(v) for v in evx[:200]]),
-          open("out/probe_wrap12.json", "w"))
+          open("out/probe_wrap12.json", "w", encoding="utf-8"))
