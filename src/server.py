@@ -298,6 +298,10 @@ class Sim(threading.Thread):
                   spikes=int(len(pts)), n_fired=int(fired.size),
                   action=self.A[action[0] if isinstance(action, tuple) else action], ori=ori, heading=round(ship_heading_deg(ori), 1),
                   lesion=sorted(self.lesion), mode=self.mode,
+                  # [이슈 #65] 이 프로세스의 GPU 메모리. nvidia-smi 는 GPU 전체(브라우저·데스크톱 포함)라
+                  #   누수 판정에 못 쓴다 — 30분 시험에서 ±500 MB 씩 출렁였다.
+                  vram_a=round(torch.cuda.memory_allocated()/2**20, 1),
+                  vram_r=round(torch.cuda.memory_reserved()/2**20, 1),
                   ship=[round(float(xy[0]), 1), round(float(xy[1]), 1)] if xy else None,
                   looms=[dict(x=round(float(L["x"]), 1), y=round(float(L["y"]), 1),
                               w=int(L["w"]), h=int(L["h"]),

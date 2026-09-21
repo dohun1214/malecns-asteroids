@@ -118,6 +118,9 @@ breaks it."* Switching off **the same 275 cells** and getting opposite results p
 | **Chase** mode, LC10a off | **−100.0 %** | +0.0 % |
 | Chase mode, DNp11 off | −38.0 % | +0.0 % |
 
+> ⚠️ The avoidance column is 3 episodes × 3,000 frames per condition with 1–2 deaths each, so its **resolution is low.**
+> The two chase-mode +0.0 % entries mean "not resolvable at this scale" rather than "no difference". The flee-mode LC10a row is 0 % because the game runs identically to the decimal.
+
 The nose really does turn: angular distance to the nearest asteroid goes **118.4° → 55.7°**.
 As a negative control, silencing **the same number (275) of random cells** barely costs
 anything (8.3 ± 0.8 % vs 9.6 % intact, 5 seeds). Only when those 275 cells are LC10a
@@ -272,7 +275,7 @@ This repository also records **what does not work**. That is part of the evidenc
 | Left-turn bias of +27.0 % | ⏸ Diagnosed: not LC4 cell count, but **per-cell synaptic strength (right 10 % stronger)** and a **39 % mismatch in DN→readout ipsi/contra ratio**. Deliberately **not corrected**, to avoid adding a fitted constant. *A rule-based controller on the same geometry leans the other way (−15.7 %).* ⚠️ **The sign structure is stable; the magnitude is not** — it is a closed loop. Always quote the setup |
 | ~~Accuracy of the y wrap period~~ | ✅ **Pinned at 178.** Caught open-loop from asteroid wrap events: **86 events, all 178, sd 0.0** (`probe_wrap12.py`). Five measurement attempts failed first — notably, **a closed-loop behavioural scan cannot resolve it in principle** |
 | The `frames per life` metric | ✅ **Replaced.** Ship-visibility runs are sensitive to detection changes → use `life_per_death` (= frames / (deaths + 1)). The old metric is kept for reference |
-| Escape direction error of 82.8° | ⏸ Still large after inertia compensation. The dominant cause is that **the target moves faster than the ship can turn** (55 % of target changes exceed the 22.5° per-decision turn). Structural, given the real-time budget |
+| ~~Escape direction error of 82.8°~~ | 🔴 **Metric withdrawn** (issue #65). "Intended vs actual movement direction" gives **the same value for a ship moving at random** (median: rule 128.7° / random 128.8°). The escape bearing is expansion-weighted, so asteroids the ship is moving toward dominate it, and any motion alone pushes it opposite the motion — **it measures geometry, not control.** Conclusions drawn from it ("inertia compensation 92.9 → 82.8°", "target volatility is a structural limit") are withdrawn. Gate 3's bearing error (paired replay, against the geometric answer) is a different metric and unaffected |
 | Does inertia compensation help **survival**? | ⚠️ **Unknown.** The old metric (ship-visible runs) said +25 %; re-measured with `life_per_death` it **halves** survival (brain 2,542 → 1,213, rule 3,000 → 1,264 frames). Score goes up (brain +13 %, rule +24 %). 8 episodes with 0–3 deaths each is coarse — **no survival claim is made** (issue #63) |
 | A supervised MLP does better | ⏸ 43.6° vs 56.2°. Not a refutation, but we do not claim the connectome is optimal |
 | Sign of the fore/aft axis | ⚠️ An imposed value. Confirmed indirectly by behaviour (it flees threats) |

@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from play import (BrainPolicy, make_env, Vision, ACT_EVERY, with_fire,
                   frame_action)
-from vision import player_xy, ship_heading_deg, ASPECT
+from vision import player_xy, ship_heading_deg, ASPECT, WRAP_Y
 
 ROOT = Path(__file__).resolve().parent.parent
 N_EP = int(sys.argv[1]) if len(sys.argv) > 1 else 8
@@ -61,7 +61,7 @@ for ep in range(N_EP):
         go = None
         if prev is not None:
             dx = xy[0]-prev[0]; dy = xy[1]-prev[1]
-            dx -= 160.0*round(dx/160.0); dy -= 210.0*round(dy/210.0)
+            dx -= 160.0*round(dx/160.0); dy -= WRAP_Y*round(dy/WRAP_Y)   # [이슈 #65] 210 -> 178
             dy = -dy/ASPECT
             if np.hypot(dx, dy) > 0.3: go = np.degrees(np.arctan2(dy, dx)) % 360.0
         if ch["norm"] > 1e-9:

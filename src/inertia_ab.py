@@ -17,7 +17,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from play import (BrainPolicy, GreedyPolicy, run_episode, make_env, Vision,
                   with_fire, frame_action, ACT_EVERY)
-from vision import player_xy, ship_heading_deg, ASPECT
+from vision import player_xy, ship_heading_deg, ASPECT, WRAP_Y
 
 ROOT = Path(__file__).resolve().parent.parent
 N_EP = int(sys.argv[1]) if len(sys.argv) > 1 else 8
@@ -82,7 +82,7 @@ def heading_gap(pol, seed0):
                 # 보정판을 자기 보정 목표로 채점하면 당연히 잘 나온다 (자기 채점 금지).
                 psi_esc = np.degrees(np.arctan2(ch["lateral"], ch["fore"])) + 180.0
                 want = (ship_heading_deg(ori) - psi_esc) % 360.0
-                dx = wrap(xy[0]-prev[0], 160.0); dy = -wrap(xy[1]-prev[1], 210.0)/ASPECT
+                dx = wrap(xy[0]-prev[0], 160.0); dy = -wrap(xy[1]-prev[1], WRAP_Y)/ASPECT   # [이슈 #65] 210 -> 178
                 if np.hypot(dx, dy) > 0.3:
                     go = np.degrees(np.arctan2(dy, dx)) % 360.0
                     gaps.append(abs((want - go + 180.0) % 360.0 - 180.0))
