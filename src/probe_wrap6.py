@@ -56,4 +56,4 @@ for nm, d, lo, hi, small in (("x", dxs, 140, 200, 6.0), ("y", dys, 140, 220, 6.0
     say(f"   상위 후보: " + "  ".join(f"{p}:{f*100:.2f}%" for p, f in top))
     say(f"   현재 코드 값 {160 if nm=='x' else 210} 일 때: "
         f"{dict(rows)[160 if nm=='x' else 210]*100:.2f}%")
-json.dump(dict(n=len(dxs)), open("out/probe_wrap6.json", "w"))
+json.dump(dict(n=len(dxs)), open("out/probe_wrap6.json", "w", encoding="utf-8"))

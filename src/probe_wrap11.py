@@ -105,4 +105,4 @@ def mode(v, name, known=None):
 
 mx = mode(evx, "x 주기", known=160)
 my = mode(evy, "y 주기")
-json.dump(dict(x=mx, y=my), open("out/probe_wrap11.json", "w"))
+json.dump(dict(x=mx, y=my), open("out/probe_wrap11.json", "w", encoding="utf-8"))

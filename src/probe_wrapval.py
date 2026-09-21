@@ -62,4 +62,4 @@ for px in (140, 150, 156, 158, 160, 162, 166, 176, 200):
     if bx is None or r < bx[1]: bx = (px, r)
 say(f"   -> 최소는 **WRAP_X = {bx[0]}** ({bx[1]*100:.2f}%)")
 json.dump(dict(best_y=best[0], best_x=bx[0]),
-          open("out/probe_wrapval.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrapval.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)

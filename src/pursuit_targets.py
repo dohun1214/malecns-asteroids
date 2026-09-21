@@ -90,5 +90,5 @@ np.savez(G/"pursuit_readout.npz", left=use_L.astype(np.int64), right=use_R.astyp
          side_left=np.array([str(x) for x in sd[use_L]]),
          side_right=np.array([str(x) for x in sd[use_R]]))
 rep["used"] = dict(left=int(len(use_L)), right=int(len(use_R)))
-json.dump(rep, open(OUT/"pursuit_targets.json", "w"), ensure_ascii=False, indent=1)
+json.dump(rep, open(OUT/"pursuit_targets.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n-> graph/pursuit_readout.npz")

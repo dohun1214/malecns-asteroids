@@ -61,5 +61,5 @@ for n, (x, y) in P.items():
 json.dump({n: dict(n=len(v[0]), xmin=float(min(v[0])), xmax=float(max(v[0])),
                    ymin=float(min(v[1])), ymax=float(max(v[1])))
            for n, v in P.items() if v[0]},
-          open("out/probe_wrap3.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrap3.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/probe_wrap3.json")

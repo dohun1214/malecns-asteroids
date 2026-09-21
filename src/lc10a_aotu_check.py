@@ -131,7 +131,7 @@ for src in ("AOTU019", "AOTU025"):
                 f"   대측비 {contra/(ipsi+contra)*100:5.1f}%")
             R["lat"][f"{src}->{dst}"] = dict(ipsi=ipsi, contra=contra)
 
-json.dump(R, open(OUT/"lc10a_aotu_check.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open(OUT/"lc10a_aotu_check.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/lc10a_aotu_check.json")
 
 # ---------------------------------------------------------------------------
@@ -181,5 +181,5 @@ for s in ("L", "R"):
     say(f"  {s} 반구 편심 차이 {obs:.2f}  양측 순열 p = {(hits+1)/(NPERM+1):.4f}")
     R["ecc"][s]["p_two_sided"] = (hits+1)/(NPERM+1)
 
-json.dump(R, open(OUT/"lc10a_aotu_check.json", "w"), ensure_ascii=False, indent=1)
+json.dump(R, open(OUT/"lc10a_aotu_check.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("저장(갱신): out/lc10a_aotu_check.json")

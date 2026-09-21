@@ -96,5 +96,5 @@ json.dump(dict(n_pair=n_pair, wrap_frac=n_wrap/n_pair, big_frac=n_big/n_pair,
                dphi_med=float(np.median(dphi)), dphi_mean=float(dphi.mean()),
                xmin=float(xs.min()), xmax=float(xs.max()),
                ymin=float(ys.min()), ymax=float(ys.max())),
-          open("out/probe_wrap.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_wrap.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/probe_wrap.json")

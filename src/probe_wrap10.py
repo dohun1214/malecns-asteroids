@@ -66,6 +66,6 @@ say(f"\n합친 범위  x {min(min(ship_x), min(ast_x)):.0f}~{max(max(ship_x), ma
     f"   y {min(min(ship_y), min(ast_y)):.0f}~{max(max(ship_y), max(ast_y)):.0f}")
 json.dump(dict(ship_x=[min(ship_x), max(ship_x)], ship_y=[min(ship_y), max(ship_y)],
                ast_x=[min(ast_x), max(ast_x)], ast_y=[min(ast_y), max(ast_y)],
-               P_x=px, P_y=py), open("out/probe_wrap10.json", "w"),
+               P_x=px, P_y=py), open("out/probe_wrap10.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
 say("저장: out/probe_wrap10.json")

@@ -1,4 +1,7 @@
-"""관성 보정 전/후 A/B (이슈 #36).
+"""
+🔴 [이슈 #60] 생존은 `life_per_death`(= 프레임 / (죽은 횟수+1)) 로 잰다.
+   예전의 `mean_life` 는 '배가 보이는 구간'이라 화면 판정이 바뀌면 흔들렸다.
+관성 보정 전/후 A/B (이슈 #36).
 
 컨트롤러가 바뀌면 궤적이 갈라지므로 짝지은 재생으로는 못 잰다. 폐루프로 직접 돌린다.
 뇌와 규칙 기반 **둘 다** 같은 보정을 받는다 — 한쪽만 주면 비교가 아니라 편들기가 된다.
@@ -14,7 +17,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from play import (BrainPolicy, GreedyPolicy, run_episode, make_env, Vision,
                   with_fire, frame_action, ACT_EVERY)
-from vision import ship_heading_deg, ASPECT
+from vision import player_xy, ship_heading_deg, ASPECT
 
 ROOT = Path(__file__).resolve().parent.parent
 N_EP = int(sys.argv[1]) if len(sys.argv) > 1 else 8
@@ -29,7 +32,7 @@ def wrap(d, span): return d - span*round(d/span)
 def ship_xy():
     for o in env.objects:
         if o and type(o).__name__ == "Player" and o.wh[0] > 0:
-            return float(o.xy[0]), float(o.xy[1])
+            return player_xy(o)   # [이슈 #63] 부호 복원
     return None
 
 
@@ -39,14 +42,14 @@ def run(pol, seed0):
     rs = [run_episode(env, pol, V, A, max_frames=MAXF, rng=rng) for _ in range(N_EP)]
     f = lambda k: (float(np.mean([r[k] for r in rs])), float(np.std([r[k] for r in rs])))
     ev = sum(r["events"] for r in rs); hit = sum(r["hits"] for r in rs)
-    return dict(score=f("score"), life=f("mean_life"), up=f("up_frac"),
+    return dict(score=f("score"), life=f("life_per_death"), up=f("up_frac"),
                 turn_bias=f("turn_bias"), events=ev, hits=hit,
                 escape=1.0 - hit/max(ev, 1),
                 # 🔴 조건 간 평균을 σ 로 비교하면 에피소드 간 분산에 묻힌다.
                 #   ALE 는 같은 no-op 시작이면 결정론적이라 **에피소드가 짝지어진다.**
                 #   에피소드별 값을 그대로 남겨서 짝지은 차이로 검정한다.
                 per_score=[float(r["score"]) for r in rs],
-                per_life=[float(r["mean_life"]) for r in rs])
+                per_life=[float(r["life_per_death"]) for r in rs])
 
 
 def heading_gap(pol, seed0):
@@ -125,9 +128,9 @@ for name in ("전체 뇌", "규칙 기반"):
     say(f"    방향 오차   {a['gap']['median']:.1f}도 -> {b['gap']['median']:.1f}도"
         f"   (>90도 {a['gap']['over90']*100:.0f}% -> {b['gap']['over90']*100:.0f}%)")
     say(f"    점수        {a['score'][0]:.0f} -> {b['score'][0]:.0f}"
-        f"   목숨당 생존 {a['life'][0]:.0f} -> {b['life'][0]:.0f}"
+        f"   죽음당 생존 {a['life'][0]:.0f} -> {b['life'][0]:.0f}"
         f"   회피율 {a['escape']*100:.1f}% -> {b['escape']*100:.1f}%")
-    for key, lab in (("per_score", "점수"), ("per_life", "목숨당 생존")):
+    for key, lab in (("per_score", "점수"), ("per_life", "죽음당 생존")):
         m, se, t = paired(a, b, key)
         mark = "유의" if abs(t) >= 2 else "잡음 안"
         say(f"    짝지은 차이 {lab:<8} {m:>+8.0f} ± {se:<7.0f} (t={t:+.2f})  {mark}")

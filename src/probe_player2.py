@@ -48,5 +48,5 @@ say(f"  y 분위수  1% {np.percentile(ys,1):.0f}  50% {np.percentile(ys,50):.0f
     f"  90% {np.percentile(ys,90):.0f}  99% {np.percentile(ys,99):.0f}  max {ys.max():.0f}")
 say(f"  화면 밖 y 의 고유값: {sorted(set(int(v) for v in ys[ys>210]))[:12]}")
 json.dump(dict(tot=tot, bad=bad, frac=bad/max(tot,1)),
-          open("out/probe_player2.json", "w"), ensure_ascii=False, indent=1)
+          open("out/probe_player2.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("저장: out/probe_player2.json")

@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from play import (BrainPolicy, make_env, Vision, ACT_EVERY, with_fire,
                   frame_action)
-from vision import ship_heading_deg, ASPECT
+from vision import player_xy, ship_heading_deg, ASPECT
 
 ROOT = Path(__file__).resolve().parent.parent
 N_EP = int(sys.argv[1]) if len(sys.argv) > 1 else 8
@@ -36,7 +36,7 @@ def signed(d): return (d + 180.0) % 360.0 - 180.0
 def ship_xy():
     for o in env.objects:
         if o and type(o).__name__ == "Player" and o.wh[0] > 0:
-            return float(o.xy[0]), float(o.xy[1])
+            return player_xy(o)   # [이슈 #63] 부호 복원
     return None
 
 

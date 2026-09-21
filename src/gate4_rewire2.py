@@ -115,5 +115,5 @@ for name, sl in (("lc10a_other", sel_other), ("lc4_dn", sel_lc4dn),
                     keep=float(np.mean(ampv))/base_amp*100)
 
 set_packed(packed0)
-json.dump(Rs, open(OUT/"gate4_rewire2.json", "w"), ensure_ascii=False, indent=1)
+json.dump(Rs, open(OUT/"gate4_rewire2.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 say("\n저장: out/gate4_rewire2.json")
