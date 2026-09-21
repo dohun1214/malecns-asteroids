@@ -15,7 +15,9 @@ import websockets
 ROOT = Path(__file__).resolve().parent.parent
 MIN = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
 URL = "ws://localhost:8765"
-GROUPS = ["DNp11", "DNp02", "DNp01", "LC4half", "rewire"]
+GROUPS = ["DNp11", "DNp02", "DNp01", "LC4half", "rewire", "LC10a", "rewire_p"]
+# [이슈 #65] 두 뇌(도망/쫓기)를 올린 뒤의 시험. 세션(1분)마다 모드를 번갈아 바꾼다.
+MODES = ["escape", "pursuit"]
 def say(*a): print(*a, flush=True)
 
 
@@ -41,13 +43,15 @@ def proc_mem():
     return rss, vram
 
 
-async def session(dur, tag, toggle=True):
+async def session(dur, tag, toggle=True, mode=None):
     """한 번 접속해서 dur 초 동안 통계를 모은다."""
     st = dict(fps=[], ms=[], spk=[], gap=[], n=0, bytes=0, scores=[], lesion_ok=0,
-              lesion_bad=0, new_eps=0)
+              lesion_bad=0, new_eps=0, mode_bad=0, va=[], vr=[])
     t0 = time.perf_counter(); last = t0; last_step = None; want = set()
     async with websockets.connect(URL, compression=None, max_size=None) as ws:
         nxt_toggle = t0 + 20
+        if mode is not None:
+            await ws.send(json.dumps({"cmd": "mode", "mode": mode}))
         while time.perf_counter() - t0 < dur:
             m = await asyncio.wait_for(ws.recv(), timeout=10)
             st["bytes"] += len(m)
@@ -57,10 +61,17 @@ async def session(dur, tag, toggle=True):
             now = time.perf_counter()
             st["gap"].append(now - last); last = now
             st["n"] += 1
+            if "vram_a" in d: st["va"].append(d["vram_a"]); st["vr"].append(d["vram_r"])
             st["fps"].append(d.get("fps", 0)); st["ms"].append(d.get("ms_brain", 0))
             st["spk"].append(d.get("n_fired", 0)); st["scores"].append(d.get("score", 0))
-            if last_step is not None and d["step"] < last_step: st["new_eps"] += 1
-            last_step = d["step"]
+            # 🔴 [이슈 #65] 서버의 step 은 에피소드가 바뀌어도 0 으로 안 돌아간다 (전역 카운터).
+            #   예전엔 step 감소로 새 에피소드를 세서 **항상 0** 이었다 — "30분 동안 한 번도 안 죽었다"
+            #   (06문서 §10)는 이 버그가 만든 문장이다. 점수는 새 에피소드에서 0 으로 돌아가므로 그걸로 센다.
+            sc = float(d.get("score", 0))
+            if last_step is not None and sc < last_step: st["new_eps"] += 1
+            last_step = sc
+            if mode is not None and d.get("mode") not in (None, mode) and now - t0 > 2:
+                st["mode_bad"] += 1
             if set(d.get("lesion", [])) == want: st["lesion_ok"] += 1
             else: st["lesion_bad"] += 1
             if toggle and now > nxt_toggle:
@@ -84,7 +95,8 @@ async def main():
     t0 = time.perf_counter(); rows = []
     while time.perf_counter() - t0 < MIN*60:
         try:
-            s = await session(60, "s")
+            mode = MODES[len(rows) % len(MODES)]
+            s = await session(60, "s", mode=mode)
         except Exception as e:
             say(f"  !! 세션 실패: {type(e).__name__} {e}"); await asyncio.sleep(2); continue
         rss, vram = proc_mem()
@@ -94,12 +106,14 @@ async def main():
                    spk=float(np.mean(s["spk"])), gap=float(np.median(g)),
                    gmax=float(g.max() if len(g) else np.nan),
                    rss=rss, vram=vram, score=float(np.max(s["scores"])),
-                   neweps=s["new_eps"],
+                   neweps=s["new_eps"], mode=mode, mode_bad=s["mode_bad"],
+                   va=float(s["va"][-1]) if s["va"] else np.nan,
+                   vr=float(s["vr"][-1]) if s["vr"] else np.nan,
                    sync=s["lesion_ok"]/max(s["lesion_ok"]+s["lesion_bad"], 1))
         rows.append(row)
         say(f"{row['t']:>5.1f}분{row['fps']:>7.1f}{row['ms']:>8.1f}{row['spk']:>8.0f}"
             f"{row['gap']:>9.1f}{row['gmax']:>9.1f}{row['rss']:>9.0f}{row['vram']:>9.0f}"
-            f"{row['score']:>8.0f}{row['neweps']:>7}{row['sync']*100:>8.0f}%")
+            f"{row['score']:>8.0f}{row['neweps']:>7}{row['sync']*100:>8.0f}%  {mode} 모드불일치 {row['mode_bad']}  torch할당 {row['va']:.0f} 예약 {row['vr']:.0f} MB")
         await asyncio.sleep(1)              # 끊긴 채로 잠깐 — 죽은 소켓 처리 확인
 
     say(f"\n{'='*96}\n판정")
@@ -115,15 +129,23 @@ async def main():
     ok3 = not np.isfinite(drift) or drift < 200
     say(f"  {'통과' if ok3 else '실패'}  RSS  {rs[0]:.0f} -> {rs[-1]:.0f} MB "
         f"({drift:+.0f} MB / {MIN:.0f}분)")
-    vd = (vr[-1]-vr[0]) if np.isfinite(vr).all() else np.nan
-    ok4 = not np.isfinite(vd) or vd < 200
-    say(f"  {'통과' if ok4 else '실패'}  VRAM {vr[0]:.0f} -> {vr[-1]:.0f} MB ({vd:+.0f} MB)")
+    # 🔴 [이슈 #65] nvidia-smi 값은 GPU 전체라 다른 앱에 따라 출렁인다 → 참고로만.
+    #   판정은 서버 프로세스의 torch 할당량으로 한다.
+    say(f"  참고  VRAM(GPU 전체, nvidia-smi) {vr[0]:.0f} -> {vr[-1]:.0f} MB, 범위 {np.nanmin(vr):.0f}~{np.nanmax(vr):.0f}")
+    ta = np.asarray([r["va"] for r in rows]); tr_ = np.asarray([r["vr"] for r in rows])
+    if np.isfinite(ta).all():
+        vd = ta[-1]-ta[0]; ok4 = abs(vd) < 50
+        say(f"  {'통과' if ok4 else '실패'}  torch 할당 {ta[0]:.0f} -> {ta[-1]:.0f} MB ({vd:+.1f}), "
+            f"예약 {tr_[0]:.0f} -> {tr_[-1]:.0f} MB")
+    else:
+        ok4 = True; say("  참고  서버가 torch 메모리를 안 보낸다 (구버전 서버)")
     sy = np.asarray([r["sync"] for r in rows])
     say(f"  참고  병변 상태 동기 {sy.mean()*100:.0f}% (토글 직후 몇 프레임은 어긋나는 게 정상)")
     say(f"  참고  새 에피소드 전환 {sum(r['neweps'] for r in rows)}회, "
         f"최고 점수 {max(r['score'] for r in rows):.0f}")
     say(f"  참고  프레임 간격 중앙값 {np.median([r['gap'] for r in rows]):.1f}ms "
         f"(15Hz = 66.7ms), 최대 {max(r['gmax'] for r in rows):.0f}ms")
+    say(f"  참고  모드 불일치 프레임 {sum(r['mode_bad'] for r in rows)} (세션 {len(rows)}개, 모드 번갈아)")
     say(f"\n  -> 장시간 시험 {'통과' if (ok1 and ok2 and ok3 and ok4) else '미통과'}")
     (ROOT/"out").mkdir(exist_ok=True)
     (ROOT/"out"/"soak.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
